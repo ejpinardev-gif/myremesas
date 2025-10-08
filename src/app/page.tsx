@@ -44,6 +44,7 @@ export default function Home() {
   const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
   const [isLoading, setIsLoading] = useState({ rates: true, history: true, accounts: true, adminHistory: true });
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
 
   // UI STATE
   const [amountSend, setAmountSend] = useState<string>("10000");
@@ -75,23 +76,29 @@ export default function Home() {
     if (!isUserLoading) {
       if (user) {
         setAuthStatus("Autenticado. Listo para usar.");
+        
         // Dev check: Treat anonymous users as admins in development
         if (user.isAnonymous && process.env.NODE_ENV === 'development') {
           setIsAdmin(true);
-        } else {
-           user.getIdTokenResult().then(idTokenResult => {
+          setShowAdminPanel(true);
+          return;
+        }
+
+        user.getIdTokenResult().then(idTokenResult => {
             const claims = idTokenResult.claims;
             if (claims.admin) {
               setIsAdmin(true);
+              setShowAdminPanel(true);
             } else {
               setIsAdmin(false);
+              setShowAdminPanel(false);
             }
-          });
-        }
+        });
       } else {
         setAuthStatus("Autenticando...");
         initiateAnonymousSignIn(auth);
         setIsAdmin(false);
+        setShowAdminPanel(false);
       }
     }
   }, [user, isUserLoading, auth]);
@@ -150,7 +157,7 @@ export default function Home() {
   
   // All Transactions Listener (for Admin)
   useEffect(() => {
-    if (!user || !firestore || !isAdmin) {
+    if (!firestore || !showAdminPanel) {
       setIsLoading(prev => ({ ...prev, adminHistory: false }));
       setAllTransactions([]);
       return;
@@ -183,7 +190,7 @@ export default function Home() {
 
     return () => unsubscribe();
 
-  }, [user, firestore, isAdmin]);
+  }, [firestore, showAdminPanel]);
 
 
   // Admin Accounts Listener
@@ -409,7 +416,7 @@ export default function Home() {
             </div>
           ) : (
             <>
-              {isAdmin && (
+              {showAdminPanel && (
                 <AdminPanel
                   liveRates={liveRates}
                   derivedRates={derived}
@@ -457,5 +464,3 @@ export default function Home() {
     </>
   );
 }
-
-    
