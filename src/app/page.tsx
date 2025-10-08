@@ -8,7 +8,7 @@ import {
   useFirestore,
   useUser,
 } from "@/firebase";
-import { collection, query, onSnapshot, serverTimestamp, doc, addDoc, deleteDoc, updateDoc, collectionGroup } from "firebase/firestore";
+import { collection, query, onSnapshot, serverTimestamp, doc, addDoc, deleteDoc, updateDoc } from "firebase/firestore";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
@@ -40,9 +40,8 @@ export default function Home() {
   // DATA STATE
   const [liveRates, setLiveRates] = useState<ExchangeRates | null>(null);
   const [userTransactions, setUserTransactions] = useState<Transaction[]>([]);
-  const [allTransactions, setAllTransactions] = useState<FullTransaction[]>([]);
   const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
-  const [isLoading, setIsLoading] = useState({ rates: true, history: true, accounts: true, adminHistory: true });
+  const [isLoading, setIsLoading] = useState({ rates: true, history: true, accounts: true });
   const [isDevAdmin, setIsDevAdmin] = useState(false);
 
   // UI STATE
@@ -145,43 +144,6 @@ export default function Home() {
     return () => unsubscribe();
   }, [user, appId, firestore]);
   
-  // All Transactions Listener (for Admin)
-  useEffect(() => {
-    if (!firestore || !isDevAdmin) {
-      setIsLoading(prev => ({ ...prev, adminHistory: false }));
-      setAllTransactions([]);
-      return;
-    }
-    
-    setIsLoading(prev => ({ ...prev, adminHistory: true }));
-    const transactionsGroup = collectionGroup(firestore, 'transactions');
-
-    const unsubscribe = onSnapshot(transactionsGroup, (snapshot) => {
-      const all: FullTransaction[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data() as TransactionData;
-        all.push({
-          id: doc.id,
-          userId: doc.ref.parent.parent?.id ?? 'unknown',
-          ...data,
-          timestamp: data.timestamp ? data.timestamp.toDate() : new Date(),
-        });
-      });
-      setAllTransactions(all.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()));
-      setIsLoading(prev => ({ ...prev, adminHistory: false }));
-    }, (error) => {
-       const permissionError = new FirestorePermissionError({
-          path: 'transactions', // collection group name
-          operation: 'list',
-      });
-      errorEmitter.emit('permission-error', permissionError);
-      setIsLoading(prev => ({ ...prev, adminHistory: false }));
-    });
-
-    return () => unsubscribe();
-
-  }, [firestore, isDevAdmin]);
-
 
   // Admin Accounts Listener
   useEffect(() => {
@@ -313,7 +275,11 @@ export default function Home() {
   const handleAdminUpdateTransaction = async (userId: string, transactionId: string, dataToUpdate: Partial<TransactionData>): Promise<boolean> => {
     if (!firestore || !isDevAdmin) return false;
     
-    const collectionPath = `artifacts/${appId}/users/${userId}/transactions`;
+    // In dev, the admin updates their own transactions.
+    const finalUserId = process.env.NODE_ENV === 'development' ? user?.uid : userId;
+    if (!finalUserId) return false;
+
+    const collectionPath = `artifacts/${appId}/users/${finalUserId}/transactions`;
     const docRef = doc(firestore, collectionPath, transactionId);
     
     try {
@@ -386,6 +352,8 @@ export default function Home() {
   };
   
   const isPageLoading = isUserLoading || (isLoading.rates && liveRates === null);
+  
+  const allTransactionsForAdmin = userTransactions.map(tx => ({...tx, userId: user?.uid || 'unknown' }));
 
   return (
     <>
@@ -413,8 +381,8 @@ export default function Home() {
                   savedAccounts={adminAccounts}
                   onSaveAccount={handleSaveAccount}
                   onDeleteAccount={handleDeleteAccount}
-                  isLoading={isLoading.rates || isLoading.accounts || isLoading.adminHistory}
-                  allTransactions={allTransactions}
+                  isLoading={isLoading.rates || isLoading.accounts || isLoading.history}
+                  allTransactions={allTransactionsForAdmin}
                   onAdminUpdateTransaction={handleAdminUpdateTransaction}
                   uploadFile={uploadFile}
                 />
@@ -454,5 +422,3 @@ export default function Home() {
     </>
   );
 }
-
-    
