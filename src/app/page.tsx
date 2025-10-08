@@ -12,7 +12,7 @@ import { collection, query, onSnapshot, serverTimestamp, doc, addDoc, deleteDoc,
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
-import type { Currency, ExchangeRates, CalculatedRates, Transaction, AdminAccount, TransactionData, RecipientData, FullTransaction } from "@/lib/types";
+import type { Currency, ExchangeRates, CalculatedRates, Transaction, AdminAccount, TransactionData, RecipientData, FullTransaction, AdminAccountData } from "@/lib/types";
 import { getDynamicRates } from "@/app/actions";
 import { calculateFullRates } from "@/lib/rate-calculator";
 import { uploadFile as uploadFileAction } from "@/app/actions";
@@ -63,8 +63,10 @@ export default function Home() {
           return 0;
       }
       const calculatedAmount = amount * currentRate;
+      // Round up to the nearest two decimal places
       return Math.ceil(calculatedAmount * 100) / 100;
   }, [amountSend, currentRate]);
+
 
   // --- EFFECTS ---
 
@@ -258,7 +260,7 @@ export default function Home() {
       id: undefined, // Firestore will generate it
       timestamp: serverTimestamp(),
       status: 'pending',
-      recipient: recipientData || null,
+      recipient: recipientData && Object.keys(recipientData).length > 0 ? recipientData : null,
       userReceiptUrl: null, // will be added later
       adminReceiptUrl: null,
     };
