@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -7,11 +8,10 @@ import {
   useFirestore,
   useMemoFirebase,
   useUser,
-  setDocumentNonBlocking,
-  addDocumentNonBlocking,
-  deleteDocumentNonBlocking,
 } from "@/firebase";
 import { collection, query, onSnapshot, serverTimestamp, doc, addDoc, deleteDoc } from "firebase/firestore";
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 import type { Currency, ExchangeRates, CalculatedRates, Transaction, AdminAccount, TransactionData, AdminAccountData } from "@/lib/types";
 import { getDynamicRates } from "@/app/actions";
@@ -117,8 +117,11 @@ export default function Home() {
       setTransactions(history.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()));
       setIsLoading(prev => ({ ...prev, history: false }));
     }, (error) => {
-      console.error("Error listening to transaction history:", error);
-      toast({ variant: "destructive", title: "History Error", description: "Could not load transaction history." });
+      const permissionError = new FirestorePermissionError({
+        path: q.toString(),
+        operation: 'list',
+      });
+      errorEmitter.emit('permission-error', permissionError);
       setIsLoading(prev => ({ ...prev, history: false }));
     });
     return () => unsubscribe();
@@ -138,8 +141,11 @@ export default function Home() {
         setAdminAccounts(accounts.sort((a, b) => a.bankName.localeCompare(b.bankName)));
         setIsLoading(prev => ({...prev, accounts: false}));
     }, (error) => {
-        console.error("Error fetching admin accounts:", error);
-        toast({ variant: "destructive", title: "Account Fetch Error", description: "Could not load admin accounts." });
+        const permissionError = new FirestorePermissionError({
+            path: q.toString(),
+            operation: 'list',
+        });
+        errorEmitter.emit('permission-error', permissionError);
         setIsLoading(prev => ({...prev, accounts: false}));
     });
     return () => unsubscribe();
@@ -151,72 +157,86 @@ export default function Home() {
     setCurrencyReceive(currencySend);
   };
 
-  const handleOpenPaymentModal = async () => {
+  const handleOpenPaymentModal = () => {
     if (!user || !currentRate || parseFloat(amountSend) <= 0) {
       toast({ variant: "destructive", title: "Invalid Operation", description: "Please enter a valid amount and ensure rates are loaded." });
       return;
     }
 
-    const transactionData: Omit<TransactionData, 'timestamp' | 'rate'> & { rate: number } = {
+    const transactionData = {
       fromCurrency: currencySend,
       toCurrency: currencyReceive,
       amountSend: parseFloat(amountSend),
       amountReceive: amountReceive,
       rate: currentRate,
+      timestamp: serverTimestamp()
     };
-
-    try {
-      const collectionPath = `artifacts/${appId}/users/${user.uid}/transactions`;
-      await addDoc(collection(firestore, collectionPath), {
-        ...transactionData,
-        timestamp: serverTimestamp()
+    
+    const collectionPath = `artifacts/${appId}/users/${user.uid}/transactions`;
+    const collectionRef = collection(firestore, collectionPath);
+    
+    addDoc(collectionRef, transactionData)
+      .then(() => {
+        setIsModalOpen(true);
+      })
+      .catch((serverError) => {
+        const permissionError = new FirestorePermissionError({
+            path: collectionPath,
+            operation: 'create',
+            requestResourceData: transactionData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
       });
-      setIsModalOpen(true);
-    } catch (e) {
-      console.error("Error logging transaction:", e);
-      toast({ variant: "destructive", title: "Transaction Error", description: "Could not save the transaction." });
-    }
   };
 
-  const handleSaveAccount = async (accountData: Omit<AdminAccountData, 'updatedBy' | 'timestamp'>) => {
+  const handleSaveAccount = (accountData: Omit<AdminAccountData, 'updatedBy' | 'timestamp'>) => {
     if (!user) {
         toast({ variant: "destructive", title: "Authentication Error", description: "You must be signed in to save an account." });
-        return false;
+        return Promise.resolve(false);
     }
-    try {
-        const collectionPath = `artifacts/${appId}/public/data/admin_accounts`;
-        await addDocumentNonBlocking(collection(firestore, collectionPath), {
-            ...accountData,
-            updatedBy: user.uid,
-            timestamp: serverTimestamp()
+    
+    const dataToSave = {
+        ...accountData,
+        updatedBy: user.uid,
+        timestamp: serverTimestamp()
+    };
+    
+    const collectionPath = `artifacts/${appId}/public/data/admin_accounts`;
+    const collectionRef = collection(firestore, collectionPath);
+
+    return addDoc(collectionRef, dataToSave)
+        .then(() => {
+            toast({ title: "Success", description: "Account saved successfully." });
+            return true;
+        })
+        .catch((serverError) => {
+            const permissionError = new FirestorePermissionError({
+                path: collectionPath,
+                operation: 'create',
+                requestResourceData: dataToSave,
+            });
+            errorEmitter.emit('permission-error', permissionError);
+            return false;
         });
-        toast({ title: "Success", description: "Account saved successfully." });
-        return true;
-    } catch (error) {
-        console.error("Error saving account:", error);
-        if (error instanceof Error) {
-          toast({ variant: "destructive", title: "Save Error", description: error.message });
-        } else {
-          toast({ variant: "destructive", title: "Save Error", description: "Could not save the account." });
-        }
-        return false;
-    }
   };
 
-  const handleDeleteAccount = async (id: string) => {
+  const handleDeleteAccount = (id: string) => {
     if (!window.confirm(`Are you sure you want to delete this account?`)) return;
-    try {
-        const collectionPath = `artifacts/${appId}/public/data/admin_accounts`;
-        await deleteDocumentNonBlocking(doc(firestore, collectionPath, id));
-        toast({ title: "Success", description: "Account deleted." });
-    } catch (error) {
-        console.error("Error deleting account:", error);
-        if (error instanceof Error) {
-          toast({ variant: "destructive", title: "Delete Error", description: error.message });
-        } else {
-          toast({ variant: "destructive", title: "Delete Error", description: "Could not delete the account." });
-        }
-    }
+
+    const collectionPath = `artifacts/${appId}/public/data/admin_accounts`;
+    const docRef = doc(firestore, collectionPath, id);
+
+    deleteDoc(docRef)
+        .then(() => {
+            toast({ title: "Success", description: "Account deleted." });
+        })
+        .catch((serverError) => {
+            const permissionError = new FirestorePermissionError({
+                path: docRef.path,
+                operation: 'delete',
+            });
+            errorEmitter.emit('permission-error', permissionError);
+        });
   };
   
   const isPageLoading = isUserLoading || (isLoading.rates && liveRates === null);
@@ -278,3 +298,5 @@ export default function Home() {
     </>
   );
 }
+
+    
