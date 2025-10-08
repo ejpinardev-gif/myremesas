@@ -15,7 +15,7 @@ const Header = ({ userId, authStatus }: HeaderProps) => {
         Calculadora de Cambios
       </h1>
       <p className="text-muted-foreground">
-        Intercambio y Registro de Transacciones para CLP / VES / WLD / USDT
+        Muestra cintillo con tasas de cambio en tiempo real
       </p>
       {userId ? (
         <div className="mt-4 inline-block">
