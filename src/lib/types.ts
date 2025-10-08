@@ -23,6 +23,8 @@ export type RecipientData = {
   phoneNumber?: string;
 };
 
+export type TransactionStatus = 'pending' | 'processing' | 'completed' | 'cancelled';
+
 export interface Transaction {
   id: string;
   fromCurrency: Currency;
@@ -31,8 +33,10 @@ export interface Transaction {
   amountReceive: number;
   rate: number;
   timestamp: Date;
-  status: 'pending' | 'processing' | 'completed' | 'cancelled';
-  recipient?: RecipientData;
+  status: TransactionStatus;
+  recipient?: RecipientData | null;
+  userReceiptUrl?: string | null; // URL del comprobante subido por el usuario
+  adminReceiptUrl?: string | null; // URL del comprobante subido por el admin
 }
 
 export interface TransactionData {
@@ -40,10 +44,12 @@ export interface TransactionData {
   toCurrency: Currency;
   amountSend: number;
   amountReceive: number;
-  rate: Timestamp;
+  rate: number;
   timestamp: Timestamp;
-  status: 'pending' | 'processing' | 'completed' | 'cancelled';
-  recipient?: RecipientData;
+  status: TransactionStatus;
+  recipient?: RecipientData | null;
+  userReceiptUrl?: string | null;
+  adminReceiptUrl?: string | null;
 }
 
 export interface AdminAccount {
@@ -66,3 +72,5 @@ export interface AdminAccountData {
   updatedBy: string;
   timestamp: Timestamp;
 }
+
+    

@@ -5,12 +5,20 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { formatCurrency } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { formatCurrency, cn } from "@/lib/utils";
 import type { Transaction } from "@/lib/types";
 
 type TransactionHistoryProps = {
   transactions: Transaction[];
   isLoading: boolean;
+};
+
+const statusColors = {
+  pending: "bg-yellow-100 text-yellow-800 border-yellow-200",
+  processing: "bg-blue-100 text-blue-800 border-blue-200",
+  completed: "bg-green-100 text-green-800 border-green-200",
+  cancelled: "bg-red-100 text-red-800 border-red-200",
 };
 
 const TransactionHistory = ({ transactions, isLoading }: TransactionHistoryProps) => {
@@ -42,12 +50,15 @@ const TransactionHistory = ({ transactions, isLoading }: TransactionHistoryProps
                 <div key={t.id}>
                   <div className="flex justify-between items-start text-sm">
                     <span className="font-bold text-foreground">{formatCurrency(t.amountSend, t.fromCurrency)}</span>
-                    <span className="text-xs text-muted-foreground">{t.timestamp.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                    <Badge variant="outline" className={cn("text-xs", statusColors[t.status])}>
+                      {t.status}
+                    </Badge>
                   </div>
                   <div className="flex justify-between items-center text-xs mt-1">
                     <span className="text-cyan-600 font-semibold">→ {formatCurrency(t.amountReceive, t.toCurrency)}</span>
-                    <span className="text-muted-foreground">Tasa: {t.rate.toFixed(6)}</span>
+                    <span className="text-muted-foreground">{t.timestamp.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
+                  <div className="text-xs text-muted-foreground mt-1">Tasa: {t.rate.toFixed(6)}</div>
                   {index < transactions.length - 1 && <Separator className="mt-4"/>}
                 </div>
               ))

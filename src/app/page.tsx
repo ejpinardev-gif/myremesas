@@ -6,7 +6,6 @@ import type { User } from "firebase/auth";
 import {
   useAuth,
   useFirestore,
-  useMemoFirebase,
   useUser,
 } from "@/firebase";
 import { collection, query, onSnapshot, serverTimestamp, doc, addDoc, deleteDoc, updateDoc } from "firebase/firestore";
@@ -47,7 +46,7 @@ export default function Home() {
   const [currencySend, setCurrencySend] = useState<Currency>("CLP");
   const [currencyReceive, setCurrencyReceive] = useState<Currency>("VES");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [currentTransactionId, setCurrentTransactionId] = useState<string | null>(null);
+  const [currentTransaction, setCurrentTransaction] = useState<Transaction | null>(null);
   
   // DERIVED STATE
   const { rates: calculatedRates, derived } = useMemo(() => calculateFullRates(liveRates), [liveRates]);
@@ -60,7 +59,6 @@ export default function Home() {
           return 0;
       }
       const calculatedAmount = amount * currentRate;
-      // Redondear hacia arriba a 2 decimales
       return Math.ceil(calculatedAmount * 100) / 100;
   }, [amountSend, currentRate]);
 
@@ -161,73 +159,93 @@ export default function Home() {
   };
 
   const handleOpenPaymentModal = () => {
-    if (!user || !currentRate || parseFloat(amountSend) <= 0 || !firestore) {
+    if (!user || !currentRate || parseFloat(amountSend) <= 0) {
       toast({ variant: "destructive", title: "Operación Inválida", description: "Por favor, ingrese un monto válido y asegúrese de que las tasas estén cargadas." });
       return;
     }
 
-    const transactionData = {
+    const newTransaction: Omit<Transaction, 'id' | 'timestamp'> = {
       fromCurrency: currencySend,
       toCurrency: currencyReceive,
       amountSend: parseFloat(amountSend),
       amountReceive: amountReceive,
       rate: currentRate,
-      timestamp: serverTimestamp(),
-      status: 'pending'
+      status: 'pending',
     };
     
-    const collectionPath = `artifacts/${appId}/users/${user.uid}/transactions`;
-    const collectionRef = collection(firestore, collectionPath);
-    
-    addDoc(collectionRef, transactionData)
-      .then((docRef) => {
-        setCurrentTransactionId(docRef.id);
-        setIsModalOpen(true);
-      })
-      .catch((serverError) => {
-        const permissionError = new FirestorePermissionError({
-            path: collectionPath,
-            operation: 'create',
-            requestResourceData: transactionData,
-        });
-        errorEmitter.emit('permission-error', permissionError);
-      });
+    // We set a temporary transaction object to pass to the modal
+    // The actual DB write happens inside the modal flow
+    setCurrentTransaction({
+      ...newTransaction,
+      id: `temp-${Date.now()}`,
+      timestamp: new Date()
+    });
+    setIsModalOpen(true);
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setCurrentTransactionId(null);
+    setCurrentTransaction(null);
   };
 
-  const handleSaveRecipient = (recipientData: RecipientData): Promise<boolean> => {
-    if (!user || !firestore || !currentTransactionId) {
-      toast({ variant: "destructive", title: "Error", description: "No se pudo guardar la información del destinatario." });
-      return Promise.resolve(false);
+  const handleSaveTransaction = async (recipientData?: RecipientData, receiptUrl?: string): Promise<string | null> => {
+    if (!user || !firestore || !currentTransaction) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo guardar la transacción." });
+      return null;
     }
   
-    const collectionPath = `artifacts/${appId}/users/${user.uid}/transactions`;
-    const docRef = doc(firestore, collectionPath, currentTransactionId);
-  
-    const dataToUpdate = {
-      recipient: recipientData,
-      status: 'processing'
+    const transactionData = {
+      ...currentTransaction,
+      id: undefined, // Firestore will generate it
+      timestamp: serverTimestamp(),
+      status: 'pending',
+      recipient: recipientData || null,
+      userReceiptUrl: receiptUrl || null,
     };
+    
+    delete (transactionData as any).id;
   
-    return updateDoc(docRef, dataToUpdate)
-      .then(() => {
-        toast({ title: "Éxito", description: "Datos del destinatario guardados." });
-        return true;
-      })
-      .catch((serverError) => {
-        const permissionError = new FirestorePermissionError({
-          path: docRef.path,
-          operation: 'update',
-          requestResourceData: dataToUpdate,
-        });
-        errorEmitter.emit('permission-error', permissionError);
-        return false;
+    const collectionPath = `artifacts/${appId}/users/${user.uid}/transactions`;
+    const collectionRef = collection(firestore, collectionPath);
+  
+    try {
+      const docRef = await addDoc(collectionRef, transactionData);
+      toast({ title: "Éxito", description: "Transacción iniciada. Sube tu comprobante." });
+      return docRef.id;
+    } catch (serverError) {
+      const permissionError = new FirestorePermissionError({
+        path: collectionPath,
+        operation: 'create',
+        requestResourceData: transactionData,
       });
+      errorEmitter.emit('permission-error', permissionError);
+      return null;
+    }
   };
+
+  const handleUpdateTransaction = async (transactionId: string, dataToUpdate: Partial<TransactionData>): Promise<boolean> => {
+    if (!user || !firestore) {
+      toast({ variant: "destructive", title: "Error de Autenticación", description: "No se pudo actualizar la transacción." });
+      return false;
+    }
+    const collectionPath = `artifacts/${appId}/users/${user.uid}/transactions`;
+    const docRef = doc(firestore, collectionPath, transactionId);
+
+    try {
+      await updateDoc(docRef, dataToUpdate);
+      toast({ title: "Éxito", description: "Tu transacción ha sido actualizada." });
+      return true;
+    } catch (serverError) {
+      const permissionError = new FirestorePermissionError({
+        path: docRef.path,
+        operation: 'update',
+        requestResourceData: dataToUpdate,
+      });
+      errorEmitter.emit('permission-error', permissionError);
+      return false;
+    }
+  };
+
 
   const handleSaveAccount = (accountData: Omit<AdminAccountData, 'updatedBy' | 'timestamp'>) => {
     if (!user || !firestore) {
@@ -287,8 +305,6 @@ export default function Home() {
       <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans" style={{ backgroundColor: 'var(--background-color)', color: 'var(--text-color)' }}>
         <div className="max-w-4xl mx-auto">
           <Header 
-            userId={user?.uid} 
-            authStatus={authStatus} 
             rates={calculatedRates}
             isLoading={isLoading.rates}
           />
@@ -332,16 +348,18 @@ export default function Home() {
           )}
         </div>
       </div>
-      <PaymentModal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        amountSend={parseFloat(amountSend)}
-        currencySend={currencySend}
-        amountReceive={amountReceive}
-        currencyReceive={currencyReceive}
-        adminAccounts={adminAccounts}
-        onSaveRecipient={handleSaveRecipient}
-      />
+      {currentTransaction && (
+        <PaymentModal
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          transaction={currentTransaction}
+          adminAccounts={adminAccounts}
+          onSaveTransaction={handleSaveTransaction}
+          onUpdateTransaction={handleUpdateTransaction}
+        />
+      )}
     </>
   );
 }
+
+    

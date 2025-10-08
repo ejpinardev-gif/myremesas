@@ -30,22 +30,22 @@ import banks from "@/lib/bancos-venezuela.json";
 const recipientSchema = z.object({
   paymentMethod: z.enum(["bank", "pagoMovil"], { required_error: "Debe seleccionar un método de pago." }),
   fullName: z.string().min(3, "El nombre completo es requerido."),
-  cedula: z.string().min(6, "La cédula es requerida.").regex(/^\d+$/, "La cédula solo debe contener números."),
+  cedula: z.string().min(6, "La cédula es requerida.").regex(/^[VvEeGgJj]-\d+$/, "La cédula debe tener el formato V-12345678"),
   bank: z.string().min(1, "Debe seleccionar un banco."),
   accountNumber: z.string().optional(),
   phoneNumber: z.string().optional(),
 }).refine(data => {
   if (data.paymentMethod === 'bank') {
-    return !!data.accountNumber && data.accountNumber.length >= 20;
+    return !!data.accountNumber && data.accountNumber.length === 20 && /^\d+$/.test(data.accountNumber);
   }
   return true;
-}, { message: "El número de cuenta debe tener 20 dígitos.", path: ["accountNumber"] })
+}, { message: "El número de cuenta debe tener 20 dígitos numéricos.", path: ["accountNumber"] })
 .refine(data => {
   if (data.paymentMethod === 'pagoMovil') {
-    return !!data.phoneNumber && data.phoneNumber.length >= 10;
+    return !!data.phoneNumber && /^\d{10,11}$/.test(data.phoneNumber);
   }
   return true;
-}, { message: "El número de teléfono es requerido.", path: ["phoneNumber"] });
+}, { message: "El número de teléfono debe tener entre 10 y 11 dígitos.", path: ["phoneNumber"] });
 
 type RecipientFormValues = z.infer<typeof recipientSchema>;
 
@@ -62,8 +62,10 @@ const RecipientForm = ({ onSubmit, onBack }: RecipientFormProps) => {
     defaultValues: {
       paymentMethod: "bank",
       fullName: "",
-      cedula: "",
+      cedula: "V-",
       bank: "",
+      accountNumber: "",
+      phoneNumber: ""
     },
   });
 
@@ -71,7 +73,8 @@ const RecipientForm = ({ onSubmit, onBack }: RecipientFormProps) => {
 
   const handleFormSubmit: SubmitHandler<RecipientFormValues> = async (data) => {
     setIsSubmitting(true);
-    await onSubmit(data);
+    const success = await onSubmit(data);
+    // Do not reset the form here, the modal will close on success.
     setIsSubmitting(false);
   };
 
@@ -192,12 +195,12 @@ const RecipientForm = ({ onSubmit, onBack }: RecipientFormProps) => {
           />
         )}
         
-        <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 pt-4">
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-between pt-4">
             <Button type="button" variant="outline" onClick={onBack} disabled={isSubmitting}>
-                 <ArrowLeft className="mr-2 h-4 w-4" /> Volver
+                 <ArrowLeft className="mr-2 h-4 w-4" /> Cancelar
             </Button>
             <Button type="submit" disabled={isSubmitting} className="mb-2 sm:mb-0">
-              {isSubmitting ? "Guardando..." : "Guardar y Finalizar"}
+              {isSubmitting ? "Guardando..." : "Guardar y Continuar al Pago"}
             </Button>
         </div>
 
@@ -207,3 +210,5 @@ const RecipientForm = ({ onSubmit, onBack }: RecipientFormProps) => {
 };
 
 export default RecipientForm;
+
+    

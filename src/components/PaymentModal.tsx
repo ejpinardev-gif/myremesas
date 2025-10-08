@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -12,22 +12,22 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
-import type { Currency, AdminAccount, RecipientData } from "@/lib/types";
+import type { Currency, AdminAccount, RecipientData, Transaction, TransactionData } from "@/lib/types";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Copy, ArrowRight } from "lucide-react";
+import { Copy, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import RecipientForm from "./RecipientForm";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 
 type PaymentModalProps = {
   isOpen: boolean;
   onClose: () => void;
-  amountSend: number;
-  currencySend: Currency;
-  amountReceive: number;
-  currencyReceive: Currency;
+  transaction: Transaction;
   adminAccounts: AdminAccount[];
-  onSaveRecipient: (data: RecipientData) => Promise<boolean>;
+  onSaveTransaction: (recipientData?: RecipientData) => Promise<string | null>;
+  onUpdateTransaction: (transactionId: string, dataToUpdate: Partial<TransactionData>) => Promise<boolean>;
 };
 
 const AccountDetail = ({
@@ -66,30 +66,69 @@ const AccountDetail = ({
 const PaymentModal = ({
   isOpen,
   onClose,
-  amountSend,
-  currencySend,
-  amountReceive,
-  currencyReceive,
+  transaction,
   adminAccounts,
-  onSaveRecipient,
+  onSaveTransaction,
+  onUpdateTransaction,
 }: PaymentModalProps) => {
-  const [step, setStep] = useState(1); // 1: Payment instructions, 2: Recipient form
+  
+  const { fromCurrency, toCurrency, amountSend, amountReceive } = transaction;
 
+  const requiresRecipientInfo = toCurrency === "VES";
+  const [step, setStep] = useState(requiresRecipientInfo ? 1 : 2); // 1: Recipient, 2: Payment, 3: Confirmation
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [newTransactionId, setNewTransactionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Reset state when modal opens or transaction changes
+    if (isOpen) {
+      setStep(requiresRecipientInfo ? 1 : 2);
+      setNewTransactionId(null);
+    }
+  }, [isOpen, requiresRecipientInfo, transaction.id]);
+
+  const handleRecipientFormSubmit = async (data: RecipientData) => {
+    setIsSubmitting(true);
+    const createdTxId = await onSaveTransaction(data);
+    setIsSubmitting(false);
+    if (createdTxId) {
+      setNewTransactionId(createdTxId);
+      setStep(2); // Move to payment instructions
+      return true;
+    }
+    return false;
+  };
+
+  const handleReceiptUpload = async () => {
+    // This is a placeholder for file upload logic.
+    // In a real app, you would upload the file to a service like Firebase Storage
+    // and get back a URL.
+    setIsSubmitting(true);
+    const receiptUrl = "https://example.com/comprobante.jpg"; // Placeholder URL
+    const txId = newTransactionId || transaction.id;
+
+    if(txId.startsWith('temp-')) {
+        // This case handles non-VES transactions where the tx isn't saved yet
+        const createdTxId = await onSaveTransaction();
+        if(createdTxId) {
+            await onUpdateTransaction(createdTxId, { userReceiptUrl: receiptUrl, status: 'processing' });
+            setStep(3);
+        }
+    } else {
+        await onUpdateTransaction(txId, { userReceiptUrl: receiptUrl, status: 'processing' });
+        setStep(3);
+    }
+    setIsSubmitting(false);
+  };
+  
   const handleClose = () => {
-    setStep(1);
+    setStep(requiresRecipientInfo ? 1 : 2);
+    setNewTransactionId(null);
     onClose();
   };
 
-  const handleRecipientFormSubmit = async (data: RecipientData) => {
-    const success = await onSaveRecipient(data);
-    if (success) {
-      handleClose();
-    }
-    return success;
-  };
-
   const renderPaymentInstructions = () => {
-    if (currencySend === "CLP") {
+    if (fromCurrency === "CLP") {
       return (
         <div className="p-4 bg-muted/50 rounded-lg border">
           <h3 className="text-lg font-bold text-foreground mb-3">
@@ -99,37 +138,22 @@ const PaymentModal = ({
             <div className="space-y-3">
               {adminAccounts.length > 0 ? (
                 adminAccounts.map((account) => (
-                  <div
-                    key={account.id}
-                    className="p-3 my-2 border bg-background rounded-lg text-sm"
-                  >
-                    <p className="font-bold text-foreground mb-2">
-                      {account.bankName} ({account.accountType})
-                    </p>
-                    <AccountDetail
-                      label="Titular"
-                      value={account.accountHolder}
-                    />
+                  <div key={account.id} className="p-3 my-2 border bg-background rounded-lg text-sm">
+                    <p className="font-bold text-foreground mb-2">{account.bankName} ({account.accountType})</p>
+                    <AccountDetail label="Titular" value={account.accountHolder} />
                     <AccountDetail label="RUT" value={account.rut} />
-                    <AccountDetail
-                      label="Cuenta"
-                      value={account.accountNumber}
-                    />
-                    {account.email && (
-                      <AccountDetail label="Email" value={account.email} />
-                    )}
+                    <AccountDetail label="Cuenta" value={account.accountNumber} />
+                    {account.email && (<AccountDetail label="Email" value={account.email} />)}
                   </div>
                 ))
               ) : (
-                <p className="text-muted-foreground text-sm">
-                  El administrador no ha configurado cuentas CLP.
-                </p>
+                <p className="text-muted-foreground text-sm">El administrador no ha configurado cuentas CLP.</p>
               )}
             </div>
           </ScrollArea>
         </div>
       );
-    } else if (currencySend === 'WLD') {
+    } else if (fromCurrency === 'WLD') {
       return (
          <Alert variant="default" className="bg-blue-50 border-blue-200">
             <AlertTitle className="text-blue-800">Instrucciones para WLD</AlertTitle>
@@ -138,77 +162,79 @@ const PaymentModal = ({
             </AlertDescription>
           </Alert>
       )
-    }
-    else {
+    } else {
       return (
         <Alert variant="destructive">
           <AlertTitle>Transferencia Crypto</AlertTitle>
           <AlertDescription>
-            Estás enviando una criptomoneda. Por favor, contacta al administrador
-            para obtener la dirección de la billetera correcta antes de enviar fondos.
+            Estás enviando una criptomoneda. Por favor, contacta al administrador para obtener la dirección de la billetera correcta antes de enviar fondos.
           </AlertDescription>
         </Alert>
       );
     }
   };
-  
-  const showRecipientForm = currencyReceive === "VES";
+
+  const getTitle = () => {
+    if (step === 1) return `Datos del Destinatario (${toCurrency})`;
+    if (step === 2) return "Realiza tu Pago";
+    if (step === 3) return "Transacción en Proceso";
+    return "Detalles de la Transacción";
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-2xl">
-            {step === 1 ? "Detalles de la Transferencia" : "Datos del Destinatario (VES)"}
-          </DialogTitle>
+          <DialogTitle className="text-2xl">{getTitle()}</DialogTitle>
         </DialogHeader>
 
-        {step === 1 && (
+        {step === 1 && requiresRecipientInfo && (
+          <RecipientForm onSubmit={handleRecipientFormSubmit} onBack={handleClose} />
+        )}
+        
+        {step === 2 && (
           <>
             <div className="p-4 mb-4 bg-destructive/10 border-l-4 border-destructive rounded-lg">
-              <p className="text-sm font-medium text-destructive">
-                Monto EXACTO a Transferir:
-              </p>
-              <p className="text-3xl font-extrabold text-destructive/90 mt-1">
-                {formatCurrency(amountSend, currencySend)}
-              </p>
-              <p className="text-xs text-destructive/80 mt-2">
-                Recibirás aprox:{" "}
-                <span className="font-bold">
-                  {formatCurrency(amountReceive, currencyReceive)}
-                </span>
-              </p>
+              <p className="text-sm font-medium text-destructive">Monto EXACTO a Transferir:</p>
+              <p className="text-3xl font-extrabold text-destructive/90 mt-1">{formatCurrency(amountSend, fromCurrency)}</p>
+              <p className="text-xs text-destructive/80 mt-2">Recibirás aprox: <span className="font-bold">{formatCurrency(amountReceive, toCurrency)}</span></p>
             </div>
-
+            
             {renderPaymentInstructions()}
 
-            <p className="text-xs text-muted-foreground mt-4 text-center">
-              Una vez completada la transferencia, envía el comprobante al administrador
-              vía WhatsApp/Email.
-            </p>
+            <div className="space-y-2 mt-4">
+              <Label htmlFor="receipt">Sube tu Comprobante de Pago</Label>
+              <Input id="receipt" type="file" className="text-xs"/>
+              <p className="text-xs text-muted-foreground">Sube una imagen de tu transferencia para acelerar el proceso.</p>
+            </div>
 
-            <DialogFooter className="mt-4">
-              {showRecipientForm ? (
-                <Button onClick={() => setStep(2)} className="w-full">
-                  He Realizado el Pago, Siguiente <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              ) : (
-                <DialogClose asChild>
-                  <Button type="button" className="w-full">
-                    Entendido / Cerrar
-                  </Button>
-                </DialogClose>
-              )}
+            <DialogFooter className="mt-6">
+              <Button onClick={handleReceiptUpload} className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? "Enviando..." : "He Realizado el Pago y Subido el Comprobante"}
+              </Button>
             </DialogFooter>
           </>
         )}
 
-        {step === 2 && showRecipientForm && (
-            <RecipientForm onSubmit={handleRecipientFormSubmit} onBack={() => setStep(1)} />
+        {step === 3 && (
+            <div className="flex flex-col items-center justify-center text-center p-6">
+                <CheckCircle2 className="h-16 w-16 text-green-500 mb-4" />
+                <h3 className="text-xl font-bold text-foreground">¡Excelente!</h3>
+                <p className="text-muted-foreground mt-2">
+                    Hemos recibido tus datos. Tu orden está ahora en estado <span className="font-semibold text-primary">Pendiente</span>.
+                    El administrador verificará tu pago y procesará la transferencia. Puedes seguir el estado en el historial.
+                </p>
+                <DialogFooter className="mt-6 w-full">
+                    <Button onClick={handleClose} className="w-full">Entendido, Cerrar</Button>
+                </DialogFooter>
+            </div>
         )}
+
       </DialogContent>
     </Dialog>
   );
 };
 
 export default PaymentModal;
+
+    

@@ -1,3 +1,4 @@
+
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
@@ -24,10 +25,12 @@ export function formatCurrency(value: number, currencyCode: string): string {
   } catch (e) {
     // Fallback for environments without full ICU support
     if (currencyCode === 'CLP') {
-      return `${value.toFixed(0)} ${currencyCode}`;
+      return `CLP ${value.toFixed(0)}`;
     }
     return `${value.toFixed(2)} ${currencyCode}`;
   }
 
   return `${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currencyCode}`;
 }
+
+    
