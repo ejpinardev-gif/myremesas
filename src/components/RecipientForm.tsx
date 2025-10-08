@@ -77,7 +77,7 @@ const RecipientForm = ({ onSubmit, onBack }: RecipientFormProps) => {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 pt-4">
         <FormField
           control={form.control}
           name="paymentMethod"
@@ -196,7 +196,7 @@ const RecipientForm = ({ onSubmit, onBack }: RecipientFormProps) => {
             <Button type="button" variant="outline" onClick={onBack} disabled={isSubmitting}>
                  <ArrowLeft className="mr-2 h-4 w-4" /> Volver
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting} className="mb-2 sm:mb-0">
               {isSubmitting ? "Guardando..." : "Guardar y Finalizar"}
             </Button>
         </div>
