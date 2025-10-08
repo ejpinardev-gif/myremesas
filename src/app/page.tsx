@@ -2,10 +2,17 @@
 
 import { useState, useEffect, useMemo } from "react";
 import type { User } from "firebase/auth";
-import { onAuthStateChanged, signInAnonymously } from "firebase/auth";
-import { collection, query, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc } from "firebase/firestore";
+import {
+  useAuth,
+  useFirestore,
+  useMemoFirebase,
+  useUser,
+  setDocumentNonBlocking,
+  addDocumentNonBlocking,
+  deleteDocumentNonBlocking,
+} from "@/firebase";
+import { collection, query, onSnapshot, serverTimestamp, doc, addDoc, deleteDoc } from "firebase/firestore";
 
-import { auth, db } from "@/lib/firebase";
 import type { Currency, ExchangeRates, CalculatedRates, Transaction, AdminAccount, TransactionData, AdminAccountData } from "@/lib/types";
 import { getDynamicRates } from "@/app/actions";
 import { calculateFullRates } from "@/lib/rate-calculator";
@@ -18,14 +25,15 @@ import ExchangeCalculator from "@/components/ExchangeCalculator";
 import TransactionHistory from "@/components/TransactionHistory";
 import PaymentModal from "@/components/PaymentModal";
 import { Skeleton } from "@/components/ui/skeleton";
+import { initiateAnonymousSignIn } from "@/firebase/non-blocking-login";
 
 export default function Home() {
   const { toast } = useToast();
+  const auth = useAuth();
+  const firestore = useFirestore();
+  const { user, isUserLoading } = useUser();
 
-  // AUTH STATE
-  const [user, setUser] = useState<User | null>(null);
   const [authStatus, setAuthStatus] = useState("Initializing...");
-  const [isAuthReady, setIsAuthReady] = useState(false);
   const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID || 'default-remesa-app';
 
   // DATA STATE
@@ -57,24 +65,15 @@ export default function Home() {
 
   // Auth Effect
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
+    if (!isUserLoading) {
+      if (user) {
         setAuthStatus("Authenticated. Ready to use.");
-        setIsAuthReady(true);
       } else {
-        setUser(null);
-        setIsAuthReady(false);
         setAuthStatus("Authenticating...");
-        signInAnonymously(auth).catch(err => {
-          console.error("Anonymous sign-in failed:", err);
-          setAuthStatus(`Authentication Error: ${err.message}`);
-          toast({ variant: "destructive", title: "Authentication Error", description: "Could not sign in anonymously." });
-        });
+        initiateAnonymousSignIn(auth);
       }
-    });
-    return () => unsubscribe();
-  }, [toast]);
+    }
+  }, [user, isUserLoading, auth]);
 
   // Fetch Dynamic Rates Effect
   useEffect(() => {
@@ -100,10 +99,10 @@ export default function Home() {
 
   // Transaction History Listener
   useEffect(() => {
-    if (!isAuthReady || !user) return;
+    if (!user) return;
     setIsLoading(prev => ({ ...prev, history: true }));
     const collectionPath = `artifacts/${appId}/users/${user.uid}/transactions`;
-    const q = query(collection(db, collectionPath));
+    const q = query(collection(firestore, collectionPath));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const history: Transaction[] = [];
@@ -123,14 +122,14 @@ export default function Home() {
       setIsLoading(prev => ({ ...prev, history: false }));
     });
     return () => unsubscribe();
-  }, [isAuthReady, user, appId, toast]);
+  }, [user, appId, firestore, toast]);
 
   // Admin Accounts Listener
   useEffect(() => {
-    if (!db) return;
+    if (!firestore) return;
     setIsLoading(prev => ({...prev, accounts: true}));
     const collectionPath = `artifacts/${appId}/public/data/admin_accounts`;
-    const q = query(collection(db, collectionPath));
+    const q = query(collection(firestore, collectionPath));
     const unsubscribe = onSnapshot(q, (snapshot) => {
         const accounts: AdminAccount[] = [];
         snapshot.forEach((doc) => {
@@ -144,7 +143,7 @@ export default function Home() {
         setIsLoading(prev => ({...prev, accounts: false}));
     });
     return () => unsubscribe();
-  }, [appId, toast]);
+  }, [appId, firestore, toast]);
   
   // --- HANDLERS ---
   const handleSwap = () => {
@@ -153,7 +152,7 @@ export default function Home() {
   };
 
   const handleOpenPaymentModal = async () => {
-    if (!isAuthReady || !user || !currentRate || parseFloat(amountSend) <= 0) {
+    if (!user || !currentRate || parseFloat(amountSend) <= 0) {
       toast({ variant: "destructive", title: "Invalid Operation", description: "Please enter a valid amount and ensure rates are loaded." });
       return;
     }
@@ -168,7 +167,7 @@ export default function Home() {
 
     try {
       const collectionPath = `artifacts/${appId}/users/${user.uid}/transactions`;
-      await addDoc(collection(db, collectionPath), {
+      await addDoc(collection(firestore, collectionPath), {
         ...transactionData,
         timestamp: serverTimestamp()
       });
@@ -186,7 +185,7 @@ export default function Home() {
     }
     try {
         const collectionPath = `artifacts/${appId}/public/data/admin_accounts`;
-        await addDoc(collection(db, collectionPath), {
+        await addDocumentNonBlocking(collection(firestore, collectionPath), {
             ...accountData,
             updatedBy: user.uid,
             timestamp: serverTimestamp()
@@ -208,7 +207,7 @@ export default function Home() {
     if (!window.confirm(`Are you sure you want to delete this account?`)) return;
     try {
         const collectionPath = `artifacts/${appId}/public/data/admin_accounts`;
-        await deleteDoc(doc(db, collectionPath, id));
+        await deleteDocumentNonBlocking(doc(firestore, collectionPath, id));
         toast({ title: "Success", description: "Account deleted." });
     } catch (error) {
         console.error("Error deleting account:", error);
@@ -220,7 +219,7 @@ export default function Home() {
     }
   };
   
-  const isPageLoading = !isAuthReady || (isLoading.rates && liveRates === null);
+  const isPageLoading = isUserLoading || (isLoading.rates && liveRates === null);
 
   return (
     <>
