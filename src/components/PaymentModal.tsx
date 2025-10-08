@@ -99,10 +99,9 @@ const PaymentModal = ({
     return false;
   };
 
-  const handleReceiptUpload = async () => {
-    // This is a placeholder for file upload logic.
-    // In a real app, you would upload the file to a service like Firebase Storage
-    // and get back a URL.
+  const handlePaymentConfirmation = async () => {
+    // This function will now handle confirming the payment.
+    // The receipt upload is optional. For now, we will just update the status.
     setIsSubmitting(true);
     const receiptUrl = "https://example.com/comprobante.jpg"; // Placeholder URL
     const txId = newTransactionId || transaction.id;
@@ -111,11 +110,11 @@ const PaymentModal = ({
         // This case handles non-VES transactions where the tx isn't saved yet
         const createdTxId = await onSaveTransaction();
         if(createdTxId) {
-            await onUpdateTransaction(createdTxId, { userReceiptUrl: receiptUrl, status: 'processing' });
+            await onUpdateTransaction(createdTxId, { status: 'processing' });
             setStep(3);
         }
     } else {
-        await onUpdateTransaction(txId, { userReceiptUrl: receiptUrl, status: 'processing' });
+        await onUpdateTransaction(txId, { status: 'processing' });
         setStep(3);
     }
     setIsSubmitting(false);
@@ -203,14 +202,14 @@ const PaymentModal = ({
             {renderPaymentInstructions()}
 
             <div className="space-y-2 mt-4">
-              <Label htmlFor="receipt">Sube tu Comprobante de Pago</Label>
+              <Label htmlFor="receipt">Sube tu Comprobante (Opcional)</Label>
               <Input id="receipt" type="file" className="text-xs"/>
-              <p className="text-xs text-muted-foreground">Sube una imagen de tu transferencia para acelerar el proceso.</p>
+              <p className="text-xs text-muted-foreground">Sube una imagen de tu transferencia para acelerar el proceso de verificación.</p>
             </div>
 
             <DialogFooter className="mt-6">
-              <Button onClick={handleReceiptUpload} className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? "Enviando..." : "He Realizado el Pago y Subido el Comprobante"}
+              <Button onClick={handlePaymentConfirmation} className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? "Procesando..." : "He Realizado el Pago"}
               </Button>
             </DialogFooter>
           </>
@@ -221,8 +220,8 @@ const PaymentModal = ({
                 <CheckCircle2 className="h-16 w-16 text-green-500 mb-4" />
                 <h3 className="text-xl font-bold text-foreground">¡Excelente!</h3>
                 <p className="text-muted-foreground mt-2">
-                    Hemos recibido tus datos. Tu orden está ahora en estado <span className="font-semibold text-primary">Pendiente</span>.
-                    El administrador verificará tu pago y procesará la transferencia. Puedes seguir el estado en el historial.
+                    Hemos recibido la confirmación de tu pago. Tu orden está ahora en estado <span className="font-semibold text-primary">Procesando</span>.
+                    El administrador verificará tu pago y procesará la transferencia a la brevedad. Puedes seguir el estado en el historial.
                 </p>
                 <DialogFooter className="mt-6 w-full">
                     <Button onClick={handleClose} className="w-full">Entendido, Cerrar</Button>
