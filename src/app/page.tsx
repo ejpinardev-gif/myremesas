@@ -99,7 +99,7 @@ export default function Home() {
 
   // Transaction History Listener
   useEffect(() => {
-    if (!user) return;
+    if (!user || !firestore) return;
     setIsLoading(prev => ({ ...prev, history: true }));
     const collectionPath = `artifacts/${appId}/users/${user.uid}/transactions`;
     const q = query(collection(firestore, collectionPath));
@@ -125,7 +125,7 @@ export default function Home() {
       setIsLoading(prev => ({ ...prev, history: false }));
     });
     return () => unsubscribe();
-  }, [user, appId, firestore, toast]);
+  }, [user, appId, firestore]);
 
   // Admin Accounts Listener
   useEffect(() => {
@@ -149,7 +149,7 @@ export default function Home() {
         setIsLoading(prev => ({...prev, accounts: false}));
     });
     return () => unsubscribe();
-  }, [appId, firestore, toast]);
+  }, [appId, firestore]);
   
   // --- HANDLERS ---
   const handleSwap = () => {
@@ -158,7 +158,7 @@ export default function Home() {
   };
 
   const handleOpenPaymentModal = () => {
-    if (!user || !currentRate || parseFloat(amountSend) <= 0) {
+    if (!user || !currentRate || parseFloat(amountSend) <= 0 || !firestore) {
       toast({ variant: "destructive", title: "Operación Inválida", description: "Por favor, ingrese un monto válido y asegúrese de que las tasas estén cargadas." });
       return;
     }
@@ -190,7 +190,7 @@ export default function Home() {
   };
 
   const handleSaveAccount = (accountData: Omit<AdminAccountData, 'updatedBy' | 'timestamp'>) => {
-    if (!user) {
+    if (!user || !firestore) {
         toast({ variant: "destructive", title: "Error de Autenticación", description: "Debes iniciar sesión para guardar una cuenta." });
         return Promise.resolve(false);
     }
@@ -221,6 +221,7 @@ export default function Home() {
   };
 
   const handleDeleteAccount = (id: string) => {
+    if (!firestore) return;
     if (!window.confirm(`¿Estás seguro de que quieres eliminar esta cuenta?`)) return;
 
     const collectionPath = `artifacts/${appId}/public/data/admin_accounts`;
@@ -243,7 +244,7 @@ export default function Home() {
 
   return (
     <>
-      <div className="min-h-screen p-4 md:p-8">
+      <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans" style={{ backgroundColor: 'var(--background-color)', color: 'var(--text-color)' }}>
         <div className="max-w-4xl mx-auto">
           <Header userId={user?.uid} authStatus={authStatus} />
           
@@ -298,5 +299,3 @@ export default function Home() {
     </>
   );
 }
-
-    
