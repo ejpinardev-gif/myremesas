@@ -78,12 +78,14 @@ const PaymentModal = ({
   const [step, setStep] = useState(requiresRecipientInfo ? 1 : 2); // 1: Recipient, 2: Payment, 3: Confirmation
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newTransactionId, setNewTransactionId] = useState<string | null>(null);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
   useEffect(() => {
     // Reset state when modal opens or transaction changes
     if (isOpen) {
       setStep(requiresRecipientInfo ? 1 : 2);
       setNewTransactionId(null);
+      setReceiptFile(null);
     }
   }, [isOpen, requiresRecipientInfo, transaction.id]);
 
@@ -103,18 +105,19 @@ const PaymentModal = ({
     // This function will now handle confirming the payment.
     // The receipt upload is optional. For now, we will just update the status.
     setIsSubmitting(true);
-    const receiptUrl = "https://example.com/comprobante.jpg"; // Placeholder URL
+    // TODO: Actually upload the receiptFile and get a URL
+    const receiptUrl = receiptFile ? "https://example.com/comprobante.jpg" : undefined; // Placeholder URL
     const txId = newTransactionId || transaction.id;
 
     if(txId.startsWith('temp-')) {
         // This case handles non-VES transactions where the tx isn't saved yet
         const createdTxId = await onSaveTransaction();
         if(createdTxId) {
-            await onUpdateTransaction(createdTxId, { status: 'processing' });
+            await onUpdateTransaction(createdTxId, { status: 'processing', userReceiptUrl: receiptUrl });
             setStep(3);
         }
     } else {
-        await onUpdateTransaction(txId, { status: 'processing' });
+        await onUpdateTransaction(txId, { status: 'processing', userReceiptUrl: receiptUrl });
         setStep(3);
     }
     setIsSubmitting(false);
@@ -123,6 +126,7 @@ const PaymentModal = ({
   const handleClose = () => {
     setStep(requiresRecipientInfo ? 1 : 2);
     setNewTransactionId(null);
+    setReceiptFile(null);
     onClose();
   };
 
@@ -202,13 +206,13 @@ const PaymentModal = ({
             {renderPaymentInstructions()}
 
             <div className="space-y-2 mt-4">
-              <Label htmlFor="receipt">Sube tu Comprobante (Opcional)</Label>
-              <Input id="receipt" type="file" className="text-xs"/>
-              <p className="text-xs text-muted-foreground">Sube una imagen de tu transferencia para acelerar el proceso de verificación.</p>
+              <Label htmlFor="receipt">Sube tu Comprobante</Label>
+              <Input id="receipt" type="file" className="text-xs" onChange={(e) => setReceiptFile(e.target.files?.[0] || null)} />
+              <p className="text-xs text-muted-foreground">El comprobante es obligatorio para continuar.</p>
             </div>
 
             <DialogFooter className="mt-6">
-              <Button onClick={handlePaymentConfirmation} className="w-full" disabled={isSubmitting}>
+              <Button onClick={handlePaymentConfirmation} className="w-full" disabled={isSubmitting || !receiptFile}>
                 {isSubmitting ? "Procesando..." : "He Realizado el Pago"}
               </Button>
             </DialogFooter>
@@ -235,5 +239,3 @@ const PaymentModal = ({
 };
 
 export default PaymentModal;
-
-    
