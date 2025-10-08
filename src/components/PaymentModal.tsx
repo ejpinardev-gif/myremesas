@@ -102,8 +102,15 @@ const PaymentModal = ({
   };
 
   const handlePaymentConfirmation = async () => {
-    // This function will now handle confirming the payment.
-    // The receipt upload is optional. For now, we will just update the status.
+    if (!receiptFile) {
+        toast({
+            variant: 'destructive',
+            title: 'Comprobante Requerido',
+            description: 'Por favor, sube el comprobante de pago para continuar.',
+        });
+        return;
+    }
+
     setIsSubmitting(true);
     // TODO: Actually upload the receiptFile and get a URL
     const receiptUrl = receiptFile ? "https://example.com/comprobante.jpg" : undefined; // Placeholder URL
@@ -239,3 +246,5 @@ const PaymentModal = ({
 };
 
 export default PaymentModal;
+
+    
