@@ -1,6 +1,7 @@
 
 "use client";
 
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,11 +12,12 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
-import type { Currency, AdminAccount } from "@/lib/types";
+import type { Currency, AdminAccount, RecipientData } from "@/lib/types";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Copy } from "lucide-react";
+import { Copy, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import RecipientForm from "./RecipientForm";
 
 type PaymentModalProps = {
   isOpen: boolean;
@@ -25,6 +27,7 @@ type PaymentModalProps = {
   amountReceive: number;
   currencyReceive: Currency;
   adminAccounts: AdminAccount[];
+  onSaveRecipient: (data: RecipientData) => Promise<boolean>;
 };
 
 const AccountDetail = ({
@@ -68,7 +71,23 @@ const PaymentModal = ({
   amountReceive,
   currencyReceive,
   adminAccounts,
+  onSaveRecipient,
 }: PaymentModalProps) => {
+  const [step, setStep] = useState(1); // 1: Payment instructions, 2: Recipient form
+
+  const handleClose = () => {
+    setStep(1);
+    onClose();
+  };
+
+  const handleRecipientFormSubmit = async (data: RecipientData) => {
+    const success = await onSaveRecipient(data);
+    if (success) {
+      handleClose();
+    }
+    return success;
+  };
+
   const renderPaymentInstructions = () => {
     if (currencySend === "CLP") {
       return (
@@ -132,43 +151,61 @@ const PaymentModal = ({
       );
     }
   };
+  
+  const showRecipientForm = currencyReceive === "VES";
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-2xl">Detalles de la Transferencia</DialogTitle>
+          <DialogTitle className="text-2xl">
+            {step === 1 ? "Detalles de la Transferencia" : "Datos del Destinatario (VES)"}
+          </DialogTitle>
         </DialogHeader>
 
-        <div className="p-4 mb-4 bg-destructive/10 border-l-4 border-destructive rounded-lg">
-          <p className="text-sm font-medium text-destructive">
-            Monto EXACTO a Transferir:
-          </p>
-          <p className="text-3xl font-extrabold text-destructive/90 mt-1">
-            {formatCurrency(amountSend, currencySend)}
-          </p>
-          <p className="text-xs text-destructive/80 mt-2">
-            Recibirás aprox:{" "}
-            <span className="font-bold">
-              {formatCurrency(amountReceive, currencyReceive)}
-            </span>
-          </p>
-        </div>
+        {step === 1 && (
+          <>
+            <div className="p-4 mb-4 bg-destructive/10 border-l-4 border-destructive rounded-lg">
+              <p className="text-sm font-medium text-destructive">
+                Monto EXACTO a Transferir:
+              </p>
+              <p className="text-3xl font-extrabold text-destructive/90 mt-1">
+                {formatCurrency(amountSend, currencySend)}
+              </p>
+              <p className="text-xs text-destructive/80 mt-2">
+                Recibirás aprox:{" "}
+                <span className="font-bold">
+                  {formatCurrency(amountReceive, currencyReceive)}
+                </span>
+              </p>
+            </div>
 
-        {renderPaymentInstructions()}
+            {renderPaymentInstructions()}
 
-        <p className="text-xs text-muted-foreground mt-4 text-center">
-          Una vez completada la transferencia, envía el comprobante al administrador
-          vía WhatsApp/Email.
-        </p>
+            <p className="text-xs text-muted-foreground mt-4 text-center">
+              Una vez completada la transferencia, envía el comprobante al administrador
+              vía WhatsApp/Email.
+            </p>
 
-        <DialogFooter className="mt-4">
-          <DialogClose asChild>
-            <Button type="button" className="w-full">
-              Entendido / Cerrar
-            </Button>
-          </DialogClose>
-        </DialogFooter>
+            <DialogFooter className="mt-4">
+              {showRecipientForm ? (
+                <Button onClick={() => setStep(2)} className="w-full">
+                  He Realizado el Pago, Siguiente <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              ) : (
+                <DialogClose asChild>
+                  <Button type="button" className="w-full">
+                    Entendido / Cerrar
+                  </Button>
+                </DialogClose>
+              )}
+            </DialogFooter>
+          </>
+        )}
+
+        {step === 2 && showRecipientForm && (
+            <RecipientForm onSubmit={handleRecipientFormSubmit} onBack={() => setStep(1)} />
+        )}
       </DialogContent>
     </Dialog>
   );

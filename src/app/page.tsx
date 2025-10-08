@@ -9,11 +9,11 @@ import {
   useMemoFirebase,
   useUser,
 } from "@/firebase";
-import { collection, query, onSnapshot, serverTimestamp, doc, addDoc, deleteDoc } from "firebase/firestore";
+import { collection, query, onSnapshot, serverTimestamp, doc, addDoc, deleteDoc, updateDoc } from "firebase/firestore";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
-import type { Currency, ExchangeRates, CalculatedRates, Transaction, AdminAccount, TransactionData, AdminAccountData } from "@/lib/types";
+import type { Currency, ExchangeRates, CalculatedRates, Transaction, AdminAccount, TransactionData, AdminAccountData, RecipientData } from "@/lib/types";
 import { getDynamicRates } from "@/app/actions";
 import { calculateFullRates } from "@/lib/rate-calculator";
 
@@ -47,6 +47,7 @@ export default function Home() {
   const [currencySend, setCurrencySend] = useState<Currency>("CLP");
   const [currencyReceive, setCurrencyReceive] = useState<Currency>("VES");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentTransactionId, setCurrentTransactionId] = useState<string | null>(null);
   
   // DERIVED STATE
   const { rates: calculatedRates, derived } = useMemo(() => calculateFullRates(liveRates), [liveRates]);
@@ -171,14 +172,16 @@ export default function Home() {
       amountSend: parseFloat(amountSend),
       amountReceive: amountReceive,
       rate: currentRate,
-      timestamp: serverTimestamp()
+      timestamp: serverTimestamp(),
+      status: 'pending'
     };
     
     const collectionPath = `artifacts/${appId}/users/${user.uid}/transactions`;
     const collectionRef = collection(firestore, collectionPath);
     
     addDoc(collectionRef, transactionData)
-      .then(() => {
+      .then((docRef) => {
+        setCurrentTransactionId(docRef.id);
         setIsModalOpen(true);
       })
       .catch((serverError) => {
@@ -188,6 +191,41 @@ export default function Home() {
             requestResourceData: transactionData,
         });
         errorEmitter.emit('permission-error', permissionError);
+      });
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setCurrentTransactionId(null);
+  };
+
+  const handleSaveRecipient = (recipientData: RecipientData): Promise<boolean> => {
+    if (!user || !firestore || !currentTransactionId) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo guardar la información del destinatario." });
+      return Promise.resolve(false);
+    }
+  
+    const collectionPath = `artifacts/${appId}/users/${user.uid}/transactions`;
+    const docRef = doc(firestore, collectionPath, currentTransactionId);
+  
+    const dataToUpdate = {
+      recipient: recipientData,
+      status: 'processing'
+    };
+  
+    return updateDoc(docRef, dataToUpdate)
+      .then(() => {
+        toast({ title: "Éxito", description: "Datos del destinatario guardados." });
+        return true;
+      })
+      .catch((serverError) => {
+        const permissionError = new FirestorePermissionError({
+          path: docRef.path,
+          operation: 'update',
+          requestResourceData: dataToUpdate,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+        return false;
       });
   };
 
@@ -296,12 +334,13 @@ export default function Home() {
       </div>
       <PaymentModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={handleCloseModal}
         amountSend={parseFloat(amountSend)}
         currencySend={currencySend}
         amountReceive={amountReceive}
         currencyReceive={currencyReceive}
         adminAccounts={adminAccounts}
+        onSaveRecipient={handleSaveRecipient}
       />
     </>
   );
