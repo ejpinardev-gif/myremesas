@@ -69,6 +69,70 @@ const PaymentModal = ({
   currencyReceive,
   adminAccounts,
 }: PaymentModalProps) => {
+  const renderPaymentInstructions = () => {
+    if (currencySend === "CLP") {
+      return (
+        <div className="p-4 bg-muted/50 rounded-lg border">
+          <h3 className="text-lg font-bold text-foreground mb-3">
+            Cuentas Disponibles para Transferencia (CLP)
+          </h3>
+          <ScrollArea className="h-[200px] pr-3">
+            <div className="space-y-3">
+              {adminAccounts.length > 0 ? (
+                adminAccounts.map((account) => (
+                  <div
+                    key={account.id}
+                    className="p-3 my-2 border bg-background rounded-lg text-sm"
+                  >
+                    <p className="font-bold text-foreground mb-2">
+                      {account.bankName} ({account.accountType})
+                    </p>
+                    <AccountDetail
+                      label="Titular"
+                      value={account.accountHolder}
+                    />
+                    <AccountDetail label="RUT" value={account.rut} />
+                    <AccountDetail
+                      label="Cuenta"
+                      value={account.accountNumber}
+                    />
+                    {account.email && (
+                      <AccountDetail label="Email" value={account.email} />
+                    )}
+                  </div>
+                ))
+              ) : (
+                <p className="text-muted-foreground text-sm">
+                  El administrador no ha configurado cuentas CLP.
+                </p>
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+      );
+    } else if (currencySend === 'WLD') {
+      return (
+         <Alert variant="default" className="bg-blue-50 border-blue-200">
+            <AlertTitle className="text-blue-800">Instrucciones para WLD</AlertTitle>
+            <AlertDescription className="text-blue-700">
+                Para confirmar su pago, por favor envíe sus monedas a través de la App de Worldcoin al usuario: <strong className="font-mono">@ejpinar</strong>
+            </AlertDescription>
+          </Alert>
+      )
+    }
+    else {
+      return (
+        <Alert variant="destructive">
+          <AlertTitle>Transferencia Crypto</AlertTitle>
+          <AlertDescription>
+            Estás enviando una criptomoneda. Por favor, contacta al administrador
+            para obtener la dirección de la billetera correcta antes de enviar fondos.
+          </AlertDescription>
+        </Alert>
+      );
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
@@ -91,53 +155,7 @@ const PaymentModal = ({
           </p>
         </div>
 
-        {currencySend === "CLP" ? (
-          <div className="p-4 bg-muted/50 rounded-lg border">
-            <h3 className="text-lg font-bold text-foreground mb-3">
-              Cuentas Disponibles para Transferencia (CLP)
-            </h3>
-            <ScrollArea className="h-[200px] pr-3">
-              <div className="space-y-3">
-                {adminAccounts.length > 0 ? (
-                  adminAccounts.map((account) => (
-                    <div
-                      key={account.id}
-                      className="p-3 my-2 border bg-background rounded-lg text-sm"
-                    >
-                      <p className="font-bold text-foreground mb-2">
-                        {account.bankName} ({account.accountType})
-                      </p>
-                      <AccountDetail
-                        label="Titular"
-                        value={account.accountHolder}
-                      />
-                      <AccountDetail label="RUT" value={account.rut} />
-                      <AccountDetail
-                        label="Cuenta"
-                        value={account.accountNumber}
-                      />
-                      {account.email && (
-                        <AccountDetail label="Email" value={account.email} />
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-muted-foreground text-sm">
-                    El administrador no ha configurado cuentas CLP.
-                  </p>
-                )}
-              </div>
-            </ScrollArea>
-          </div>
-        ) : (
-          <Alert variant="destructive">
-            <AlertTitle>Transferencia Crypto</AlertTitle>
-            <AlertDescription>
-              Estás enviando una criptomoneda. Por favor, contacta al administrador
-              para obtener la dirección de la billetera correcta antes de enviar fondos.
-            </AlertDescription>
-          </Alert>
-        )}
+        {renderPaymentInstructions()}
 
         <p className="text-xs text-muted-foreground mt-4 text-center">
           Una vez completada la transferencia, envía el comprobante al administrador
@@ -157,5 +175,3 @@ const PaymentModal = ({
 };
 
 export default PaymentModal;
-
-    
