@@ -1,91 +1,96 @@
 /**
- * @fileoverview Firestore Security Rules for the Global Exchange Hub application.
+ * @fileoverview Firestore Security Rules for Global Exchange Hub.
  *
  * Core Philosophy:
  * This ruleset enforces a strict user-ownership model for transaction data,
  * while allowing public read access to admin account information.
  *
  * Data Structure:
- * - User transaction data is nested under /artifacts/{appId}/users/{userId}/transactions/{transactionId}.
- * - Admin account data is stored in a publicly readable collection at /artifacts/{appId}/public/data/admin_accounts/{accountId}.
+ * - Transactions are nested under /artifacts/{appId}/users/{userId}/transactions/{transactionId}
+ * - Admin accounts are stored in /artifacts/{appId}/public/data/admin_accounts/{accountId}
  *
  * Key Security Decisions:
- * - Users can only access their own transaction data.
- * - Admin account data is publicly readable but write access is restricted to authenticated users.
- * - Listing transactions is only permitted for the owner of the transactions.
+ * - Transactions are secured using path-based ownership; only the user with a
+ *   matching {userId} can access their own transaction data.
+ * - Admin account information is publicly readable but write-protected,
+ *   allowing only authenticated users to create or modify them.
+ * - Listing of transactions is restricted to the owner.
+ * - No data shape validation is performed beyond ownership checks to allow for
+ *   rapid prototyping and schema iteration.
  *
- * Authorization Independence:
- * The rules are designed to avoid using `get()` calls, ensuring that authorization
- * decisions can be made based on the data present in the request and the resource.
+ * Denormalization for Authorization:
+ * - Not applicable in this configuration since the path-based ownership and public data access patterns used in this configuration do not require it.
+ *
+ * Structural Segregation:
+ * - The use of a private user subcollection (/users/{userId}/transactions) and a
+ *   public top-level collection (/admin_accounts) enables secure, performant list operations.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Enforces access control for user transaction data.
+     * @description Grants access to a user's transaction data.
      * @path /artifacts/{appId}/users/{userId}/transactions/{transactionId}
-     * @allow (create) Authenticated user can create a transaction for themselves.
-     * @allow (get) Authenticated user can read their own transaction.
-     * @allow (list) Authenticated user can list their own transactions.
-     * @allow (update) Authenticated user can update their own transaction.
-     * @allow (delete) Authenticated user can delete their own transaction.
-     * @deny (create) Authenticated user cannot create a transaction for another user.
-     * @deny (get) Authenticated user cannot read another user's transaction.
-     * @deny (list) Authenticated user cannot list another user's transactions.
-     * @deny (update) Authenticated user cannot update another user's transaction.
-     * @deny (delete) Authenticated user cannot delete another user's transaction.
-     * @principle Enforces document ownership for writes and reads.
+     * @allow (create) - Authenticated user with UID 'user123' can create a transaction under /artifacts/your-app-id/users/user123/transactions/transaction456. The `userId` path segment must match the `request.auth.uid`.
+     * @allow (get) - Authenticated user with UID 'user123' can read a transaction document under /artifacts/your-app-id/users/user123/transactions/transaction456.
+     * @allow (update) - Authenticated user with UID 'user123' can update a transaction document under /artifacts/your-app-id/users/user123/transactions/transaction456.
+     * @allow (delete) - Authenticated user with UID 'user123' can delete a transaction document under /artifacts/your-app-id/users/user123/transactions/transaction456.
+     * @allow (list) - Authenticated user with UID 'user123' can list transaction documents under /artifacts/your-app-id/users/user123/transactions.
+     * @deny (create) - Authenticated user with UID 'user456' cannot create a transaction under /artifacts/your-app-id/users/user123/transactions/transaction456 because the `userId` path segment does not match their `request.auth.uid`.
+     * @deny (get) - Authenticated user with UID 'user456' cannot read a transaction document under /artifacts/your-app-id/users/user123/transactions/transaction456.
+     * @principle Enforces document ownership for writes.
      */
     match /artifacts/{appId}/users/{userId}/transactions/{transactionId} {
-      // Allow reads to authenticated users that own the data
+      // Helper function to check if the user is signed in
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      // Helper function to check if the user is the owner of the document
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
+
+      // Helper function to check if the user is the owner of the existing document
+      function isExistingOwner(userId) {
+        return isOwner(userId) && resource != null;
+      }
+
+      // Read rules
       allow get: if isSignedIn() && isOwner(userId);
       allow list: if isSignedIn() && isOwner(userId);
 
-      // Allow creating a new document if the user is signed in and owns the data.
-      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.userId == userId;
-
-      // Allow updating an existing document if the user is signed in and owns the data.
-      allow update: if isSignedIn() && isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
-
-      // Allow deleting an existing document if the user is signed in and owns the data.
-      allow delete: if isSignedIn() && isExistingOwner(userId);
+      // Write rules
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if isExistingOwner(userId);
+      allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Allows public read access to admin account data, with write access restricted to authenticated users.
+     * @description Grants public read access to admin account data and restricts write access to authenticated users.
      * @path /artifacts/{appId}/public/data/admin_accounts/{accountId}
-     * @allow (get) Any user can read admin account data.
-     * @allow (list) Any user can list admin account data.
-     * @allow (create) Authenticated users can create admin account data.
-     * @allow (update) Authenticated users can update admin account data.
-     * @allow (delete) Authenticated users can delete admin account data.
-     * @deny (create) Unauthenticated users cannot create admin account data.
-     * @deny (update) Unauthenticated users cannot update admin account data.
-     * @deny (delete) Unauthenticated users cannot delete admin account data.
-     * @principle Allows public reads with authenticated-user-only writes.
+     * @allow (get) - Any user (authenticated or not) can read an admin account document under /artifacts/your-app-id/public/data/admin_accounts/account123.
+     * @allow (list) - Any user (authenticated or not) can list admin account documents under /artifacts/your-app-id/public/data/admin_accounts.
+     * @allow (create) - Authenticated user can create an admin account document.
+     * @deny (update) - Unauthenticated user cannot update an admin account document under /artifacts/your-app-id/public/data/admin_accounts/account123.
+     * @deny (delete) - Unauthenticated user cannot delete an admin account document under /artifacts/your-app-id/public/data/admin_accounts/account123.
+     * @principle Allows public read access while restricting write access to authenticated users.
      */
     match /artifacts/{appId}/public/data/admin_accounts/{accountId} {
+      // Helper function to check if the user is signed in
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      // Read rules: public
       allow get: if true;
       allow list: if true;
+
+      // Write rules: authenticated users only
       allow create: if isSignedIn();
       allow update: if isSignedIn() && resource != null;
       allow delete: if isSignedIn() && resource != null;
     }
-  }
-
-  // Helper function to determine if the user is signed in.
-  function isSignedIn() {
-    return request.auth != null;
-  }
-
-  // Helper function to determine if the user is the owner of the document.
-  function isOwner(userId) {
-    return request.auth.uid == userId;
-  }
-
-  // Helper function to determine if the user is the owner of the existing document.
-  function isExistingOwner(userId) {
-    return isOwner(userId) && resource != null;
   }
 }
