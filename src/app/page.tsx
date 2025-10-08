@@ -75,14 +75,19 @@ export default function Home() {
     if (!isUserLoading) {
       if (user) {
         setAuthStatus("Autenticado. Listo para usar.");
-        user.getIdTokenResult().then(idTokenResult => {
-          const claims = idTokenResult.claims;
-          if (claims.admin) {
-            setIsAdmin(true);
-          } else {
-            setIsAdmin(false);
-          }
-        });
+        // Dev check: Treat anonymous users as admins in development
+        if (user.isAnonymous && process.env.NODE_ENV === 'development') {
+          setIsAdmin(true);
+        } else {
+           user.getIdTokenResult().then(idTokenResult => {
+            const claims = idTokenResult.claims;
+            if (claims.admin) {
+              setIsAdmin(true);
+            } else {
+              setIsAdmin(false);
+            }
+          });
+        }
       } else {
         setAuthStatus("Autenticando...");
         initiateAnonymousSignIn(auth);
@@ -249,7 +254,7 @@ export default function Home() {
     return url;
   };
 
-  const handleSaveTransaction = async (recipientData?: RecipientData): Promise<string | null> => {
+  const handleSaveTransaction = async (recipientData: RecipientData): Promise<string | null> => {
     if (!user || !firestore || !currentTransaction) {
       toast({ variant: "destructive", title: "Error", description: "No se pudo guardar la transacción." });
       return null;
@@ -452,3 +457,5 @@ export default function Home() {
     </>
   );
 }
+
+    
