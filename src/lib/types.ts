@@ -25,20 +25,6 @@ export type RecipientData = {
 
 export type TransactionStatus = 'pending' | 'processing' | 'completed' | 'cancelled';
 
-export interface Transaction {
-  id: string;
-  fromCurrency: Currency;
-  toCurrency: Currency;
-  amountSend: number;
-  amountReceive: number;
-  rate: number;
-  timestamp: Date;
-  status: TransactionStatus;
-  recipient?: RecipientData | null;
-  userReceiptUrl?: string | null; // URL del comprobante subido por el usuario
-  adminReceiptUrl?: string | null; // URL del comprobante subido por el admin
-}
-
 export interface TransactionData {
   fromCurrency: Currency;
   toCurrency: Currency;
@@ -51,6 +37,16 @@ export interface TransactionData {
   userReceiptUrl?: string | null;
   adminReceiptUrl?: string | null;
 }
+
+export interface Transaction extends Omit<TransactionData, 'timestamp'> {
+  id: string;
+  timestamp: Date;
+}
+
+export interface FullTransaction extends Transaction {
+  userId: string;
+}
+
 
 export interface AdminAccount {
   id: string;
@@ -72,5 +68,3 @@ export interface AdminAccountData {
   updatedBy: string;
   timestamp: Timestamp;
 }
-
-    

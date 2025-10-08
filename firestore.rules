@@ -1,64 +1,72 @@
 /**
- * @file Firestore Security Rules for Global Exchange Hub.
+ * @fileOverview Firestore Security Rules for Global Exchange Hub.
  *
  * Core Philosophy:
- * This ruleset enforces a strict user-ownership model for transaction data, allowing users to only access their own transactions.
- * Admin account data is publicly readable but writable only by authenticated users.
+ * This ruleset enforces a strict user-ownership model for transaction data,
+ * while allowing public read access to admin account information.
  *
  * Data Structure:
- * - User transaction data is nested under /artifacts/{appId}/users/{userId}/transactions/{transactionId}.
- * - Admin account data is stored under /artifacts/{appId}/public/data/admin_accounts/{accountId}.
+ * - User transaction data is nested under /artifacts/{appId}/users/{userId}/transactions/{transactionId},
+ *   ensuring that each user can only access their own transaction records.
+ * - Admin account details are stored in the publicly accessible collection
+ *   /artifacts/{appId}/public/data/admin_accounts/{accountId}, allowing all users to view them.
  *
  * Key Security Decisions:
- * - Users can only create, read, update, and delete transactions under their own user ID.
- * - Admin account data is publicly readable.
- * - Only authenticated users can create, update or delete Admin accounts
- * - Listing of admin accounts is public.
- *
- * Denormalization for Authorization:
- * - Path-based ownership is used for transactions to avoid the need for additional reads to determine ownership.
- *
- * Structural Segregation:
- * - User transaction data and admin account data are stored in separate collections with different security requirements.
+ * - User transaction data is strictly controlled via path-based ownership, meaning only the user with the matching {userId}
+ *   can access their transactions.
+ * - Admin accounts are publicly readable to facilitate easy access to application's bank details.
+ * - Data validation is minimal in this prototyping phase.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Secure user transaction data.
+     * @description Manages user transaction data, enforcing strict ownership.
      * @path /artifacts/{appId}/users/{userId}/transactions/{transactionId}
-     * @allow (create) Authenticated user creates a transaction under their own userId.
-     * @deny (create) User attempts to create a transaction under another user's userId.
-     * @allow (get, list) Authenticated user reads/lists transactions under their own userId.
-     * @deny (get, list) User attempts to read/list transactions under another user's userId.
-     * @allow (update, delete) Authenticated user updates/deletes a transaction under their own userId.
-     * @deny (update, delete) User attempts to update/delete a transaction under another user's userId.
-     * @principle Enforces document ownership for writes and restricts access to a user's own data tree.
+     * @allow (create) - Authenticated user creates a new transaction with matching userId.
+     *    Request: { auth: { uid: 'user123' }, resource.data.userId: 'user123' }
+     * @allow (get) - Authenticated user reads a transaction with matching userId.
+     *    Request: { auth: { uid: 'user123' } }
+     * @allow (update) - Authenticated user updates a transaction with matching userId.
+     *    Request: { auth: { uid: 'user123' } }
+     * @allow (delete) - Authenticated user deletes a transaction with matching userId.
+     *    Request: { auth: { uid: 'user123' } }
+     * @deny (create) - Authenticated user attempts to create a transaction with a mismatched userId.
+     *    Request: { auth: { uid: 'user123' }, resource.data.userId: 'user456' }
+     * @principle Enforces document ownership for writes and restricts access to a user's own data.
      */
     match /artifacts/{appId}/users/{userId}/transactions/{transactionId} {
+      // Define helper function
+      function isSignedIn() {
+        return request.auth != null;
+      }
       function isOwner(userId) {
-        return request.auth != null && request.auth.uid == userId;
+        return request.auth.uid == userId;
       }
-
       function isExistingOwner(userId) {
-          return isOwner(userId) && resource != null;
+        return isOwner(userId) && resource != null;
       }
 
-      allow create: if isOwner(userId);
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
+      allow get: if isSignedIn() && isOwner(userId);
+      allow list: if isSignedIn() && isOwner(userId);
+      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.userId == userId;
+      allow update: if isSignedIn() && isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isSignedIn() && isExistingOwner(userId);
     }
 
     /**
-     * @description Secure admin account data.
+     * @description Allows public read access to admin account details, with authenticated-user-only writes.
      * @path /artifacts/{appId}/public/data/admin_accounts/{accountId}
-     * @allow (create, update, delete) Authenticated user creates/updates/deletes an admin account.
-     * @deny (create, update, delete) Unauthenticated user attempts to create/update/delete an admin account.
-     * @allow (get, list) Anyone can read/list admin accounts.
-     * @principle Allows public read access to admin account data while restricting write access to authenticated users.
+     * @allow (get) - Any user can read admin account details.
+     * @allow (list) - Any user can list admin accounts.
+     * @allow (create) - Authenticated users can create admin accounts.
+     *    Request: { auth: { uid: 'user123' } }
+     * @allow (update) - Authenticated users can update admin accounts.
+     *    Request: { auth: { uid: 'user123' } }
+     * @allow (delete) - Authenticated users can delete admin accounts.
+     *    Request: { auth: { uid: 'user123' } }
+     * @principle Provides public read access while restricting write access to authenticated users.
      */
     match /artifacts/{appId}/public/data/admin_accounts/{accountId} {
       function isSignedIn() {

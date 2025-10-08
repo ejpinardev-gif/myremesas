@@ -10,16 +10,20 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import RateMonitor from "./RateMonitor";
 import AccountManager from "./AccountManager";
-import type { ExchangeRates, AdminAccount, AdminAccountData } from "@/lib/types";
+import AdminTransactionManager from "./AdminTransactionManager";
+import type { ExchangeRates, AdminAccount, AdminAccountData, FullTransaction, TransactionData } from "@/lib/types";
 
 type AdminPanelProps = {
   liveRates: ExchangeRates | null;
   derivedRates: { usdtToClpMargin: number | null };
   savedAccounts: AdminAccount[];
+  allTransactions: FullTransaction[];
   onSaveAccount: (
     accountData: Omit<AdminAccountData, "updatedBy" | "timestamp">
   ) => Promise<boolean>;
   onDeleteAccount: (id: string) => void;
+  onAdminUpdateTransaction: (userId: string, transactionId: string, data: Partial<TransactionData>) => Promise<boolean>;
+  uploadFile: (file: File, path: string) => Promise<string>;
   isLoading: boolean;
 };
 
@@ -47,6 +51,12 @@ const AdminPanel = (props: AdminPanelProps) => {
                   onSaveAccount={props.onSaveAccount}
                   onDeleteAccount={props.onDeleteAccount}
                 />
+                 <AdminTransactionManager
+                  transactions={props.allTransactions}
+                  isLoading={props.isLoading}
+                  onUpdateTransaction={props.onAdminUpdateTransaction}
+                  uploadFile={props.uploadFile}
+                />
               </CardContent>
             </Card>
           </AccordionContent>
@@ -57,5 +67,3 @@ const AdminPanel = (props: AdminPanelProps) => {
 };
 
 export default AdminPanel;
-
-    

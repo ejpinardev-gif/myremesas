@@ -8,11 +8,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
-import type { Currency, AdminAccount, RecipientData, Transaction, TransactionData } from "@/lib/types";
+import type { AdminAccount, RecipientData, Transaction, TransactionData } from "@/lib/types";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Copy, CheckCircle2 } from "lucide-react";
@@ -26,9 +25,11 @@ type PaymentModalProps = {
   onClose: () => void;
   transaction: Transaction;
   adminAccounts: AdminAccount[];
-  onSaveTransaction: (recipientData?: RecipientData) => Promise<string | null>;
+  onSaveTransaction: (recipientData: RecipientData) => Promise<string | null>;
   onUpdateTransaction: (transactionId: string, dataToUpdate: Partial<TransactionData>) => Promise<boolean>;
+  uploadFile: (file: File, path: string) => Promise<string>;
 };
+
 
 const AccountDetail = ({
   label,
@@ -70,19 +71,21 @@ const PaymentModal = ({
   adminAccounts,
   onSaveTransaction,
   onUpdateTransaction,
+  uploadFile,
 }: PaymentModalProps) => {
   
   const { fromCurrency, toCurrency, amountSend, amountReceive } = transaction;
 
   const requiresRecipientInfo = toCurrency === "VES";
-  const [step, setStep] = useState(requiresRecipientInfo ? 1 : 2); // 1: Recipient, 2: Payment, 3: Confirmation
+  const [step, setStep] = useState(1); // 1: Recipient (if VES), 2: Payment, 3: Confirmation
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newTransactionId, setNewTransactionId] = useState<string | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
-    // Reset state when modal opens or transaction changes
     if (isOpen) {
+      // If currency is not VES, we skip recipient step
       setStep(requiresRecipientInfo ? 1 : 2);
       setNewTransactionId(null);
       setReceiptFile(null);
@@ -98,9 +101,10 @@ const PaymentModal = ({
       setStep(2); // Move to payment instructions
       return true;
     }
+    toast({ variant: "destructive", title: "Error", description: "No se pudieron guardar los datos del destinatario." });
     return false;
   };
-
+  
   const handlePaymentConfirmation = async () => {
     if (!receiptFile) {
         toast({
@@ -112,22 +116,32 @@ const PaymentModal = ({
     }
 
     setIsSubmitting(true);
-    // TODO: Actually upload the receiptFile and get a URL
-    const receiptUrl = receiptFile ? "https://example.com/comprobante.jpg" : undefined; // Placeholder URL
-    const txId = newTransactionId || transaction.id;
+    
+    // Determine the transaction ID we're working with
+    let txId = newTransactionId;
 
-    if(txId.startsWith('temp-')) {
-        // This case handles non-VES transactions where the tx isn't saved yet
-        const createdTxId = await onSaveTransaction();
-        if(createdTxId) {
-            await onUpdateTransaction(createdTxId, { status: 'processing', userReceiptUrl: receiptUrl });
-            setStep(3);
-        }
-    } else {
-        await onUpdateTransaction(txId, { status: 'processing', userReceiptUrl: receiptUrl });
-        setStep(3);
+    // This case handles non-VES transactions where the tx isn't saved until this step
+    if (!txId) {
+      const createdTxId = await onSaveTransaction({} as RecipientData); // Pass empty object as recipient is not needed
+      if(createdTxId) {
+        txId = createdTxId;
+      } else {
+        toast({ variant: "destructive", title: "Error", description: "No se pudo iniciar la transacción." });
+        setIsSubmitting(false);
+        return;
+      }
     }
-    setIsSubmitting(false);
+
+    const filePath = `receipts/${txId}/${receiptFile.name}`;
+    try {
+      const url = await uploadFile(receiptFile, filePath);
+      await onUpdateTransaction(txId, { status: 'processing', userReceiptUrl: url });
+      setStep(3);
+    } catch(e) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo subir el comprobante o actualizar la transacción." });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   
   const handleClose = () => {
@@ -215,7 +229,7 @@ const PaymentModal = ({
             <div className="space-y-2 mt-4">
               <Label htmlFor="receipt">Sube tu Comprobante</Label>
               <Input id="receipt" type="file" className="text-xs" onChange={(e) => setReceiptFile(e.target.files?.[0] || null)} />
-              <p className="text-xs text-muted-foreground">El comprobante es obligatorio para continuar.</p>
+              <p className="text-xs text-muted-foreground">El comprobante es obligatorio para avanzar.</p>
             </div>
 
             <DialogFooter className="mt-6">
@@ -246,5 +260,3 @@ const PaymentModal = ({
 };
 
 export default PaymentModal;
-
-    

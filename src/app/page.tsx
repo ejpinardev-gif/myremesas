@@ -8,13 +8,15 @@ import {
   useFirestore,
   useUser,
 } from "@/firebase";
-import { collection, query, onSnapshot, serverTimestamp, doc, addDoc, deleteDoc, updateDoc } from "firebase/firestore";
+import { collection, query, onSnapshot, serverTimestamp, doc, addDoc, deleteDoc, updateDoc, collectionGroup } from "firebase/firestore";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
-import type { Currency, ExchangeRates, CalculatedRates, Transaction, AdminAccount, TransactionData, AdminAccountData, RecipientData } from "@/lib/types";
+import type { Currency, ExchangeRates, CalculatedRates, Transaction, AdminAccount, TransactionData, AdminAccountData, RecipientData, FullTransaction } from "@/lib/types";
 import { getDynamicRates } from "@/app/actions";
 import { calculateFullRates } from "@/lib/rate-calculator";
+import { uploadFile as uploadFileAction } from "@/app/actions";
+
 
 import { useToast } from "@/hooks/use-toast";
 
@@ -37,9 +39,10 @@ export default function Home() {
 
   // DATA STATE
   const [liveRates, setLiveRates] = useState<ExchangeRates | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [userTransactions, setUserTransactions] = useState<Transaction[]>([]);
+  const [allTransactions, setAllTransactions] = useState<FullTransaction[]>([]);
   const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
-  const [isLoading, setIsLoading] = useState({ rates: true, history: true, accounts: true });
+  const [isLoading, setIsLoading] = useState({ rates: true, history: true, accounts: true, adminHistory: true });
 
   // UI STATE
   const [amountSend, setAmountSend] = useState<string>("10000");
@@ -98,7 +101,7 @@ export default function Home() {
     return () => clearInterval(intervalId);
   }, [toast]);
 
-  // Transaction History Listener
+  // Transaction History Listener (for current user)
   useEffect(() => {
     if (!user || !firestore) return;
     setIsLoading(prev => ({ ...prev, history: true }));
@@ -115,7 +118,7 @@ export default function Home() {
           timestamp: data.timestamp ? data.timestamp.toDate() : new Date(),
         });
       });
-      setTransactions(history.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()));
+      setUserTransactions(history.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()));
       setIsLoading(prev => ({ ...prev, history: false }));
     }, (error) => {
       const permissionError = new FirestorePermissionError({
@@ -127,6 +130,40 @@ export default function Home() {
     });
     return () => unsubscribe();
   }, [user, appId, firestore]);
+  
+  // All Transactions Listener (for Admin)
+  useEffect(() => {
+    if (!user || !firestore) return;
+    // TODO: Add a check to see if user is an admin before subscribing
+    setIsLoading(prev => ({ ...prev, adminHistory: true }));
+    const transactionsGroup = collectionGroup(firestore, 'transactions');
+
+    const unsubscribe = onSnapshot(transactionsGroup, (snapshot) => {
+      const all: FullTransaction[] = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data() as TransactionData;
+        all.push({
+          id: doc.id,
+          userId: doc.ref.parent.parent?.id ?? 'unknown',
+          ...data,
+          timestamp: data.timestamp ? data.timestamp.toDate() : new Date(),
+        });
+      });
+      setAllTransactions(all.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()));
+      setIsLoading(prev => ({ ...prev, adminHistory: false }));
+    }, (error) => {
+       const permissionError = new FirestorePermissionError({
+          path: 'transactions', // collection group name
+          operation: 'list',
+      });
+      errorEmitter.emit('permission-error', permissionError);
+      setIsLoading(prev => ({ ...prev, adminHistory: false }));
+    });
+
+    return () => unsubscribe();
+
+  }, [user, firestore]);
+
 
   // Admin Accounts Listener
   useEffect(() => {
@@ -187,8 +224,16 @@ export default function Home() {
     setIsModalOpen(false);
     setCurrentTransaction(null);
   };
+  
+  const uploadFile = async (file: File, path: string): Promise<string> => {
+    // This is a placeholder. In a real app, you'd upload to Firebase Storage.
+    console.log(`Simulating upload for ${file.name} to ${path}`);
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network delay
+    const url = await uploadFileAction(file, path);
+    return url;
+  };
 
-  const handleSaveTransaction = async (recipientData?: RecipientData, receiptUrl?: string): Promise<string | null> => {
+  const handleSaveTransaction = async (recipientData?: RecipientData): Promise<string | null> => {
     if (!user || !firestore || !currentTransaction) {
       toast({ variant: "destructive", title: "Error", description: "No se pudo guardar la transacción." });
       return null;
@@ -200,7 +245,8 @@ export default function Home() {
       timestamp: serverTimestamp(),
       status: 'pending',
       recipient: recipientData || null,
-      userReceiptUrl: receiptUrl || null,
+      userReceiptUrl: null, // will be added later
+      adminReceiptUrl: null,
     };
     
     delete (transactionData as any).id;
@@ -245,7 +291,27 @@ export default function Home() {
       return false;
     }
   };
-
+  
+  const handleAdminUpdateTransaction = async (userId: string, transactionId: string, dataToUpdate: Partial<TransactionData>): Promise<boolean> => {
+    if (!firestore) return false;
+    
+    const collectionPath = `artifacts/${appId}/users/${userId}/transactions`;
+    const docRef = doc(firestore, collectionPath, transactionId);
+    
+    try {
+      await updateDoc(docRef, dataToUpdate);
+      toast({ title: "Éxito (Admin)", description: `Transacción ${transactionId} actualizada.` });
+      return true;
+    } catch (serverError) {
+      const permissionError = new FirestorePermissionError({
+        path: docRef.path,
+        operation: 'update',
+        requestResourceData: dataToUpdate,
+      });
+      errorEmitter.emit('permission-error', permissionError);
+      return false;
+    }
+  };
 
   const handleSaveAccount = (accountData: Omit<AdminAccountData, 'updatedBy' | 'timestamp'>) => {
     if (!user || !firestore) {
@@ -325,7 +391,10 @@ export default function Home() {
                 savedAccounts={adminAccounts}
                 onSaveAccount={handleSaveAccount}
                 onDeleteAccount={handleDeleteAccount}
-                isLoading={isLoading.rates || isLoading.accounts}
+                isLoading={isLoading.rates || isLoading.accounts || isLoading.adminHistory}
+                allTransactions={allTransactions}
+                onAdminUpdateTransaction={handleAdminUpdateTransaction}
+                uploadFile={uploadFile}
               />
 
               <main className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -342,7 +411,7 @@ export default function Home() {
                   onPay={handleOpenPaymentModal}
                   isLoading={isLoading.rates}
                 />
-                <TransactionHistory transactions={transactions} isLoading={isLoading.history} />
+                <TransactionHistory transactions={userTransactions} isLoading={isLoading.history} />
               </main>
             </>
           )}
@@ -356,10 +425,9 @@ export default function Home() {
           adminAccounts={adminAccounts}
           onSaveTransaction={handleSaveTransaction}
           onUpdateTransaction={handleUpdateTransaction}
+          uploadFile={uploadFile}
         />
       )}
     </>
   );
 }
-
-    
