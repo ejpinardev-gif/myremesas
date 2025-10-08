@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -28,13 +29,13 @@ const AdminPanel = (props: AdminPanelProps) => {
       <Accordion type="single" collapsible className="w-full">
         <AccordionItem value="admin-panel" className="border-b-0">
           <AccordionTrigger className="w-full py-2 px-4 text-sm font-medium rounded-lg bg-card border shadow-sm hover:bg-muted/80 no-underline hover:no-underline justify-center [&[data-state=open]>svg]:rotate-180">
-            <span className="text-center">Admin Panel</span>
+            <span className="text-center">Panel de Administración</span>
           </AccordionTrigger>
           <AccordionContent>
             <Card className="mt-4 bg-card border shadow-sm">
               <CardContent className="p-6">
                 <h2 className="text-xl font-semibold mb-4 text-foreground">
-                  Configuration Panel
+                  Panel de Configuración
                 </h2>
                 <RateMonitor
                   liveRates={props.liveRates}
@@ -56,3 +57,5 @@ const AdminPanel = (props: AdminPanelProps) => {
 };
 
 export default AdminPanel;
+
+    

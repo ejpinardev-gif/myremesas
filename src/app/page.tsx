@@ -33,7 +33,7 @@ export default function Home() {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
 
-  const [authStatus, setAuthStatus] = useState("Initializing...");
+  const [authStatus, setAuthStatus] = useState("Inicializando...");
   const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID || 'default-remesa-app';
 
   // DATA STATE
@@ -67,9 +67,9 @@ export default function Home() {
   useEffect(() => {
     if (!isUserLoading) {
       if (user) {
-        setAuthStatus("Authenticated. Ready to use.");
+        setAuthStatus("Autenticado. Listo para usar.");
       } else {
-        setAuthStatus("Authenticating...");
+        setAuthStatus("Autenticando...");
         initiateAnonymousSignIn(auth);
       }
     }
@@ -79,14 +79,14 @@ export default function Home() {
   useEffect(() => {
     const fetchRates = async () => {
       setIsLoading(prev => ({ ...prev, rates: true }));
-      const systemPrompt = "Act as a P2P market data provider. Generate accurate quotes for Worldcoin, CLP, and VES against USDT. Provide realistic values for the Chilean and Venezuelan markets.";
-      const userQuery = `I need 4 rates: 1. WLD/USDT (Worldcoin to Tether). Central value 1.19. 2. USDT/CLP P2P (Tether to Chilean Peso P2P, buy rate). Central value 963. 3. CLP/USDT P2P (Chilean Peso to Tether, 3rd Sell Offer, 1 USDT to how many CLP). Central value 963. 4. VES/USDT P2P (Bolivar to Tether, market rate). Central value 36.`;
+      const systemPrompt = "Actúa como un proveedor de datos del mercado P2P. Genera cotizaciones precisas para Worldcoin, CLP y VES frente a USDT. Proporciona valores realistas para los mercados de Chile y Venezuela.";
+      const userQuery = `Necesito 4 tasas: 1. WLD/USDT (Worldcoin a Tether). Valor central 1.19. 2. USDT/CLP P2P (Tether a Peso Chileno P2P, tasa de compra). Valor central 963. 3. CLP/USDT P2P (Peso Chileno a Tether, 3ra Oferta de Venta, 1 USDT a cuántos CLP). Valor central 963. 4. VES/USDT P2P (Bolívar a Tether, tasa de mercado). Valor central 36.`;
       
       const ratesData = await getDynamicRates({ systemPrompt, query: userQuery });
       if (ratesData) {
         setLiveRates(ratesData);
       } else {
-        toast({ variant: "destructive", title: "Rate Fetch Error", description: "Could not fetch live exchange rates. Using fallback values." });
+        toast({ variant: "destructive", title: "Error al Obtener Tasas", description: "No se pudieron obtener las tasas de cambio en vivo. Usando valores de respaldo." });
         setLiveRates({ WLD_to_USDT: 1.19, USDT_to_CLP_P2P_WLD: 963, CLP_to_USDT_P2P: 963, VES_to_USDT_P2P: 36 });
       }
       setIsLoading(prev => ({ ...prev, rates: false }));
@@ -159,7 +159,7 @@ export default function Home() {
 
   const handleOpenPaymentModal = () => {
     if (!user || !currentRate || parseFloat(amountSend) <= 0) {
-      toast({ variant: "destructive", title: "Invalid Operation", description: "Please enter a valid amount and ensure rates are loaded." });
+      toast({ variant: "destructive", title: "Operación Inválida", description: "Por favor, ingrese un monto válido y asegúrese de que las tasas estén cargadas." });
       return;
     }
 
@@ -191,7 +191,7 @@ export default function Home() {
 
   const handleSaveAccount = (accountData: Omit<AdminAccountData, 'updatedBy' | 'timestamp'>) => {
     if (!user) {
-        toast({ variant: "destructive", title: "Authentication Error", description: "You must be signed in to save an account." });
+        toast({ variant: "destructive", title: "Error de Autenticación", description: "Debes iniciar sesión para guardar una cuenta." });
         return Promise.resolve(false);
     }
     
@@ -206,7 +206,7 @@ export default function Home() {
 
     return addDoc(collectionRef, dataToSave)
         .then(() => {
-            toast({ title: "Success", description: "Account saved successfully." });
+            toast({ title: "Éxito", description: "Cuenta guardada exitosamente." });
             return true;
         })
         .catch((serverError) => {
@@ -221,14 +221,14 @@ export default function Home() {
   };
 
   const handleDeleteAccount = (id: string) => {
-    if (!window.confirm(`Are you sure you want to delete this account?`)) return;
+    if (!window.confirm(`¿Estás seguro de que quieres eliminar esta cuenta?`)) return;
 
     const collectionPath = `artifacts/${appId}/public/data/admin_accounts`;
     const docRef = doc(firestore, collectionPath, id);
 
     deleteDoc(docRef)
         .then(() => {
-            toast({ title: "Success", description: "Account deleted." });
+            toast({ title: "Éxito", description: "Cuenta eliminada." });
         })
         .catch((serverError) => {
             const permissionError = new FirestorePermissionError({

@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -40,9 +41,9 @@ const AccountDetail = ({
   const handleCopy = () => {
     if (navigator.clipboard) {
       navigator.clipboard.writeText(value);
-      toast({ title: "Copied!", description: `${label} copied to clipboard.` });
+      toast({ title: "¡Copiado!", description: `${label} copiado al portapapeles.` });
     } else {
-      toast({ variant: "destructive", title: "Copy Failed", description: "Clipboard not available." });
+      toast({ variant: "destructive", title: "Copia Fallida", description: "El portapapeles no está disponible." });
     }
   };
 
@@ -72,18 +73,18 @@ const PaymentModal = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-2xl">Transfer Details</DialogTitle>
+          <DialogTitle className="text-2xl">Detalles de la Transferencia</DialogTitle>
         </DialogHeader>
 
         <div className="p-4 mb-4 bg-destructive/10 border-l-4 border-destructive rounded-lg">
           <p className="text-sm font-medium text-destructive">
-            EXACT Amount to Transfer:
+            Monto EXACTO a Transferir:
           </p>
           <p className="text-3xl font-extrabold text-destructive/90 mt-1">
             {formatCurrency(amountSend, currencySend)}
           </p>
           <p className="text-xs text-destructive/80 mt-2">
-            You will receive approx:{" "}
+            Recibirás aprox:{" "}
             <span className="font-bold">
               {formatCurrency(amountReceive, currencyReceive)}
             </span>
@@ -93,7 +94,7 @@ const PaymentModal = ({
         {currencySend === "CLP" ? (
           <div className="p-4 bg-muted/50 rounded-lg border">
             <h3 className="text-lg font-bold text-foreground mb-3">
-              Available Accounts for Transfer (CLP)
+              Cuentas Disponibles para Transferencia (CLP)
             </h3>
             <ScrollArea className="h-[200px] pr-3">
               <div className="space-y-3">
@@ -107,12 +108,12 @@ const PaymentModal = ({
                         {account.bankName} ({account.accountType})
                       </p>
                       <AccountDetail
-                        label="Holder"
+                        label="Titular"
                         value={account.accountHolder}
                       />
                       <AccountDetail label="RUT" value={account.rut} />
                       <AccountDetail
-                        label="Account"
+                        label="Cuenta"
                         value={account.accountNumber}
                       />
                       {account.email && (
@@ -122,7 +123,7 @@ const PaymentModal = ({
                   ))
                 ) : (
                   <p className="text-muted-foreground text-sm">
-                    The administrator has not configured CLP accounts.
+                    El administrador no ha configurado cuentas CLP.
                   </p>
                 )}
               </div>
@@ -130,23 +131,23 @@ const PaymentModal = ({
           </div>
         ) : (
           <Alert variant="destructive">
-            <AlertTitle>Crypto Transfer</AlertTitle>
+            <AlertTitle>Transferencia Crypto</AlertTitle>
             <AlertDescription>
-              You are sending a cryptocurrency. Please contact the administrator
-              to get the correct wallet address before sending funds.
+              Estás enviando una criptomoneda. Por favor, contacta al administrador
+              para obtener la dirección de la billetera correcta antes de enviar fondos.
             </AlertDescription>
           </Alert>
         )}
 
         <p className="text-xs text-muted-foreground mt-4 text-center">
-          Once the transfer is complete, send the receipt to the administrator
-          via WhatsApp/Email.
+          Una vez completada la transferencia, envía el comprobante al administrador
+          vía WhatsApp/Email.
         </p>
 
         <DialogFooter className="mt-4">
           <DialogClose asChild>
             <Button type="button" className="w-full">
-              Understood / Close
+              Entendido / Cerrar
             </Button>
           </DialogClose>
         </DialogFooter>
@@ -156,3 +157,5 @@ const PaymentModal = ({
 };
 
 export default PaymentModal;
+
+    

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +23,7 @@ const Header = ({ userId, authStatus }: HeaderProps) => {
       {userId ? (
         <div className="mt-4 inline-block">
           <Badge variant="outline" className="border-yellow-400 bg-yellow-50 text-yellow-900">
-            <span className="font-bold mr-2">User ID:</span> 
+            <span className="font-bold mr-2">ID de Usuario:</span> 
             <span className="font-mono text-xs">{userId}</span>
           </Badge>
         </div>
@@ -34,3 +35,5 @@ const Header = ({ userId, authStatus }: HeaderProps) => {
 };
 
 export default Header;
+
+    

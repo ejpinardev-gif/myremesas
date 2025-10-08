@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -16,7 +17,7 @@ const TransactionHistory = ({ transactions, isLoading }: TransactionHistoryProps
   return (
     <Card className="lg:col-span-1 shadow-lg">
       <CardHeader>
-        <CardTitle className="text-2xl">Transaction History</CardTitle>
+        <CardTitle className="text-2xl">Historial de Transacciones</CardTitle>
       </CardHeader>
       <CardContent>
         <ScrollArea className="h-96 pr-4">
@@ -35,7 +36,7 @@ const TransactionHistory = ({ transactions, isLoading }: TransactionHistoryProps
                 </div>
               ))
             ) : transactions.length === 0 ? (
-              <p className="text-muted-foreground text-sm pt-4">No transactions recorded yet.</p>
+              <p className="text-muted-foreground text-sm pt-4">Aún no se han registrado transacciones.</p>
             ) : (
               transactions.map((t, index) => (
                 <div key={t.id}>
@@ -45,7 +46,7 @@ const TransactionHistory = ({ transactions, isLoading }: TransactionHistoryProps
                   </div>
                   <div className="flex justify-between items-center text-xs mt-1">
                     <span className="text-cyan-600 font-semibold">→ {formatCurrency(t.amountReceive, t.toCurrency)}</span>
-                    <span className="text-muted-foreground">Rate: {t.rate.toFixed(6)}</span>
+                    <span className="text-muted-foreground">Tasa: {t.rate.toFixed(6)}</span>
                   </div>
                   {index < transactions.length - 1 && <Separator className="mt-4"/>}
                 </div>
@@ -59,3 +60,5 @@ const TransactionHistory = ({ transactions, isLoading }: TransactionHistoryProps
 };
 
 export default TransactionHistory;
+
+    

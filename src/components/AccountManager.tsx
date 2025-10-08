@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from "react";
@@ -26,15 +27,15 @@ import { Trash2 } from "lucide-react";
 import type { AdminAccount, AdminAccountData } from "@/lib/types";
 
 const accountSchema = z.object({
-  bankName: z.string().min(1, "Bank name is required"),
+  bankName: z.string().min(1, "El nombre del banco es requerido"),
   accountHolder: z
     .string()
-    .min(1, "Account holder is required")
+    .min(1, "El titular de la cuenta es requerido")
     .default("Ender Javier Piña Rojas"),
-  rut: z.string().min(1, "RUT is required").default("26728535-7"),
-  accountType: z.string().min(1, "Account type is required"),
-  accountNumber: z.string().min(1, "Account number is required"),
-  email: z.string().email("Invalid email address").optional().or(z.literal("")),
+  rut: z.string().min(1, "El RUT es requerido").default("26728535-7"),
+  accountType: z.string().min(1, "El tipo de cuenta es requerido"),
+  accountNumber: z.string().min(1, "El número de cuenta es requerido"),
+  email: z.string().email("Dirección de correo inválida").optional().or(z.literal("")),
 });
 
 type AccountFormValues = z.infer<typeof accountSchema>;
@@ -89,10 +90,10 @@ const AccountManager = ({
     <>
       <section className="border-b border-border pb-4">
         <h3 className="text-lg font-bold text-foreground mb-3">
-          Add New Account (CLP)
+          Agregar Nueva Cuenta (CLP)
         </h3>
         <p className="text-sm text-muted-foreground mb-4">
-          Enter a destination account where the user will transfer CLP.
+          Ingrese una cuenta de destino donde el usuario transferirá CLP.
         </p>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -102,7 +103,7 @@ const AccountManager = ({
                 name="accountHolder"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Account Holder</FormLabel>
+                    <FormLabel>Titular de la Cuenta</FormLabel>
                     <FormControl>
                       <Input placeholder="Ender Javier Piña Rojas" {...field} />
                     </FormControl>
@@ -128,14 +129,14 @@ const AccountManager = ({
                 name="bankName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Bank</FormLabel>
+                    <FormLabel>Banco</FormLabel>
                     <Select
                       onValueChange={field.onChange}
                       defaultValue={field.value}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="-- Select Bank --" />
+                          <SelectValue placeholder="-- Seleccione Banco --" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -155,14 +156,14 @@ const AccountManager = ({
                 name="accountType"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Account Type</FormLabel>
+                    <FormLabel>Tipo de Cuenta</FormLabel>
                     <Select
                       onValueChange={field.onChange}
                       defaultValue={field.value}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="-- Select Type --" />
+                          <SelectValue placeholder="-- Seleccione Tipo --" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -182,9 +183,9 @@ const AccountManager = ({
                 name="accountNumber"
                 render={({ field }) => (
                   <FormItem className="md:col-span-2">
-                    <FormLabel>Account Number</FormLabel>
+                    <FormLabel>Número de Cuenta</FormLabel>
                     <FormControl>
-                      <Input placeholder="Account Number" {...field} />
+                      <Input placeholder="Número de Cuenta" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -195,11 +196,11 @@ const AccountManager = ({
                 name="email"
                 render={({ field }) => (
                   <FormItem className="md:col-span-2">
-                    <FormLabel>Email (Optional)</FormLabel>
+                    <FormLabel>Email (Opcional)</FormLabel>
                     <FormControl>
                       <Input
                         type="email"
-                        placeholder="Email (Optional)"
+                        placeholder="Email (Opcional)"
                         {...field}
                       />
                     </FormControl>
@@ -209,7 +210,7 @@ const AccountManager = ({
               />
             </div>
             <Button type="submit" className="w-full mt-4" disabled={isSubmitting}>
-              {isSubmitting ? "Saving..." : "Save New Account"}
+              {isSubmitting ? "Guardando..." : "Guardar Nueva Cuenta"}
             </Button>
           </form>
         </Form>
@@ -217,13 +218,13 @@ const AccountManager = ({
 
       <section className="pt-4">
         <h3 className="text-lg font-bold text-foreground mb-3">
-          Saved Accounts ({savedAccounts.length})
+          Cuentas Guardadas ({savedAccounts.length})
         </h3>
         <ScrollArea className="h-48">
           <div className="space-y-3 pr-4">
             {savedAccounts.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No accounts configured.
+                No hay cuentas configuradas.
               </p>
             ) : (
               savedAccounts.map((account) => (
@@ -258,3 +259,5 @@ const AccountManager = ({
 };
 
 export default AccountManager;
+
+    

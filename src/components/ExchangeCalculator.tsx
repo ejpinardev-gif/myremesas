@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { Dispatch, SetStateAction } from "react";
@@ -41,15 +42,15 @@ const ExchangeCalculator = (props: ExchangeCalculatorProps) => {
   return (
     <Card className="lg:col-span-2 shadow-lg">
       <CardHeader>
-        <CardTitle className="text-2xl">Exchange Calculator</CardTitle>
+        <CardTitle className="text-2xl">Calculadora de Cambio</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div>
-          <Label htmlFor="amount-send">Amount to Send</Label>
-          <Input id="amount-send" type="number" value={amountSend} onChange={(e) => setAmountSend(e.target.value)} min="0" placeholder="e.g., 100000" className="text-lg p-3 h-auto" />
+          <Label htmlFor="amount-send">Monto a Enviar</Label>
+          <Input id="amount-send" type="number" value={amountSend} onChange={(e) => setAmountSend(e.target.value)} min="0" placeholder="ej., 100000" className="text-lg p-3 h-auto" />
         </div>
         <div>
-          <Label htmlFor="currency-send">From Currency</Label>
+          <Label htmlFor="currency-send">Moneda de Origen</Label>
           <Select value={currencySend} onValueChange={(value) => setCurrencySend(value as Currency)}>
             <SelectTrigger id="currency-send" className="text-lg p-3 h-auto"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -63,7 +64,7 @@ const ExchangeCalculator = (props: ExchangeCalculatorProps) => {
             </Button>
         </div>
         <div>
-          <Label htmlFor="currency-receive">To Currency</Label>
+          <Label htmlFor="currency-receive">Moneda de Destino</Label>
           <Select value={currencyReceive} onValueChange={(value) => setCurrencyReceive(value as Currency)}>
             <SelectTrigger id="currency-receive" className="text-lg p-3 h-auto"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -72,21 +73,21 @@ const ExchangeCalculator = (props: ExchangeCalculatorProps) => {
           </Select>
         </div>
         <div className="mt-6 p-4 bg-primary text-primary-foreground rounded-lg">
-            <p className="text-sm font-medium opacity-90">You Will Receive Approximately:</p>
+            <p className="text-sm font-medium opacity-90">Recibirás Aproximadamente:</p>
             {isLoading ? <Skeleton className="h-9 w-3/5 mt-1 bg-primary-foreground/20" /> : <p className="text-3xl font-bold mt-1">{formatCurrency(amountReceive, currencyReceive)}</p>}
             {isLoading ? <Skeleton className="h-4 w-2/5 mt-2 bg-primary-foreground/20" /> : (currentRate && <p className="text-xs mt-2 opacity-80">1 {currencySend} ≈ {currentRate.toFixed(6)} {currencyReceive}</p>)}
         </div>
         {isExchangeInvalid && !isLoading && (
             <Alert variant="destructive">
                 <AlertDescription>
-                    Error: The exchange from {currencySend} to {currencyReceive} is not a valid remittance path.
+                    Error: El cambio de {currencySend} a {currencyReceive} no es una ruta de remesa válida.
                 </AlertDescription>
             </Alert>
         )}
       </CardContent>
       <CardFooter>
         <Button onClick={onPay} className="w-full py-3 h-auto text-lg" disabled={isExchangeInvalid || isLoading || parseFloat(amountSend) <= 0}>
-            Pay and See Transfer Details
+            Pagar y Ver Detalles de Transferencia
         </Button>
       </CardFooter>
     </Card>
@@ -94,3 +95,5 @@ const ExchangeCalculator = (props: ExchangeCalculatorProps) => {
 };
 
 export default ExchangeCalculator;
+
+    

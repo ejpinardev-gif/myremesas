@@ -1,24 +1,25 @@
+
 'use server';
 /**
- * @fileOverview Market commentary flow to explain exchange rate movements.
+ * @fileOverview Flujo de comentarios de mercado para explicar los movimientos de las tasas de cambio.
  *
- * - provideMarketCommentary - A function that provides a summary of market conditions.
- * - MarketCommentaryInput - The input type for the provideMarketCommentary function.
- * - MarketCommentaryOutput - The return type for the provideMarketCommentary function.
+ * - provideMarketCommentary - Una función que proporciona un resumen de las condiciones del mercado.
+ * - MarketCommentaryInput - El tipo de entrada para la función provideMarketCommentary.
+ * - MarketCommentaryOutput - El tipo de retorno para la función provideMarketCommentary.
  */
 
 import {ai} from '@/ai/genkit';
 import {z} from 'zod';
 
 const MarketCommentaryInputSchema = z.object({
-  currencySend: z.string().describe('The currency being sent (e.g., CLP).'),
-  currencyReceive: z.string().describe('The currency being received (e.g., VES).'),
-  rate: z.number().describe('The current exchange rate between the two currencies.'),
+  currencySend: z.string().describe('La moneda que se envía (ej., CLP).'),
+  currencyReceive: z.string().describe('La moneda que se recibe (ej., VES).'),
+  rate: z.number().describe('La tasa de cambio actual entre las dos monedas.'),
 });
 export type MarketCommentaryInput = z.infer<typeof MarketCommentaryInputSchema>;
 
 const MarketCommentaryOutputSchema = z.object({
-  commentary: z.string().describe('A summary of the market conditions affecting the exchange rate.'),
+  commentary: z.string().describe('Un resumen de las condiciones del mercado que afectan la tasa de cambio.'),
 });
 export type MarketCommentaryOutput = z.infer<typeof MarketCommentaryOutputSchema>;
 
@@ -30,12 +31,12 @@ const prompt = ai.definePrompt({
   name: 'marketCommentaryPrompt',
   input: {schema: MarketCommentaryInputSchema},
   output: {schema: MarketCommentaryOutputSchema},
-  prompt: `You are an expert financial analyst providing commentary on currency exchange rates.
+  prompt: `Eres un analista financiero experto que proporciona comentarios sobre las tasas de cambio de divisas.
 
-  Provide a brief summary of the market conditions that may be influencing the exchange rate between {{currencySend}} and {{currencyReceive}}, which currently stands at {{rate}}.
-  Focus on factors that a user would easily understand, such as recent news events, economic indicators, or geopolitical situations.
-  Keep the commentary concise and to the point.
-  Response should be no more than two sentences.
+  Proporciona un breve resumen de las condiciones del mercado que pueden estar influyendo en la tasa de cambio entre {{currencySend}} y {{currencyReceive}}, que actualmente es de {{rate}}.
+  Concéntrate en factores que un usuario entendería fácilmente, como noticias recientes, indicadores económicos o situaciones geopolíticas.
+  Mantén el comentario conciso y al grano.
+  La respuesta no debe tener más de dos frases.
   `,
 });
 
@@ -50,3 +51,5 @@ const provideMarketCommentaryFlow = ai.defineFlow(
     return output!;
   }
 );
+
+    

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Separator } from "@/components/ui/separator";
@@ -40,13 +41,13 @@ const RateMonitor = ({
   return (
     <section className="mb-6">
       <h3 className="text-lg font-bold text-foreground mb-3">
-        Reference Market Rates
+        Tasas de Mercado de Referencia
       </h3>
       <p className="text-sm text-muted-foreground mb-4">
-        These rates are fetched in real-time from P2P/market data.
+        Estas tasas se obtienen en tiempo real de datos de P2P/mercado.
       </p>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <RateInfoCard title="WLD/CLP (Disc. 14%)" isLoading={isLoading}>
+        <RateInfoCard title="WLD/CLP (Desc. 14%)" isLoading={isLoading}>
           <p className="text-xs text-muted-foreground">
             WLD/USDT: {liveRates?.WLD_to_USDT?.toFixed(4) ?? "..."}
           </p>
@@ -55,7 +56,7 @@ const RateMonitor = ({
           </p>
         </RateInfoCard>
 
-        <RateInfoCard title="CLP/VES (Disc. 8%)" isLoading={isLoading}>
+        <RateInfoCard title="CLP/VES (Desc. 8%)" isLoading={isLoading}>
           <p className="text-xs text-muted-foreground">
             CLP/USDT P2P: {liveRates?.CLP_to_USDT_P2P?.toFixed(2) ?? "..."}
           </p>
@@ -64,9 +65,9 @@ const RateMonitor = ({
           </p>
         </RateInfoCard>
 
-        <RateInfoCard title="USDT/CLP (Margin +0.4%)" isLoading={isLoading}>
+        <RateInfoCard title="USDT/CLP (Margen +0.4%)" isLoading={isLoading}>
           <p className="text-xs text-muted-foreground">
-            USDT/CLP Rate: {derivedRates?.usdtToClpMargin?.toFixed(2) ?? "..."}
+            Tasa USDT/CLP: {derivedRates?.usdtToClpMargin?.toFixed(2) ?? "..."}
           </p>
         </RateInfoCard>
       </div>
@@ -76,3 +77,5 @@ const RateMonitor = ({
 };
 
 export default RateMonitor;
+
+    
