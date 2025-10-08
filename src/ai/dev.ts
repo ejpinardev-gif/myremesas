@@ -1,1 +1,5 @@
-// Flows will be imported for their side effects in this file.
+import { config } from 'dotenv';
+config();
+
+import '@/ai/flows/fetch-real-time-exchange-rates.ts';
+import '@/ai/flows/provide-market-commentary.ts';
