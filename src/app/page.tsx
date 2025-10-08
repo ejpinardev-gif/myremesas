@@ -43,8 +43,7 @@ export default function Home() {
   const [allTransactions, setAllTransactions] = useState<FullTransaction[]>([]);
   const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
   const [isLoading, setIsLoading] = useState({ rates: true, history: true, accounts: true, adminHistory: true });
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [isDevAdmin, setIsDevAdmin] = useState(false);
 
   // UI STATE
   const [amountSend, setAmountSend] = useState<string>("10000");
@@ -79,26 +78,17 @@ export default function Home() {
         
         // Dev check: Treat anonymous users as admins in development
         if (user.isAnonymous && process.env.NODE_ENV === 'development') {
-          setIsAdmin(true);
-          setShowAdminPanel(true);
-          return;
+          setIsDevAdmin(true);
+        } else {
+            user.getIdTokenResult().then(idTokenResult => {
+                const claims = idTokenResult.claims;
+                setIsDevAdmin(!!claims.admin);
+            });
         }
-
-        user.getIdTokenResult().then(idTokenResult => {
-            const claims = idTokenResult.claims;
-            if (claims.admin) {
-              setIsAdmin(true);
-              setShowAdminPanel(true);
-            } else {
-              setIsAdmin(false);
-              setShowAdminPanel(false);
-            }
-        });
       } else {
         setAuthStatus("Autenticando...");
         initiateAnonymousSignIn(auth);
-        setIsAdmin(false);
-        setShowAdminPanel(false);
+        setIsDevAdmin(false);
       }
     }
   }, [user, isUserLoading, auth]);
@@ -157,7 +147,7 @@ export default function Home() {
   
   // All Transactions Listener (for Admin)
   useEffect(() => {
-    if (!firestore || !showAdminPanel) {
+    if (!firestore || !isDevAdmin) {
       setIsLoading(prev => ({ ...prev, adminHistory: false }));
       setAllTransactions([]);
       return;
@@ -190,7 +180,7 @@ export default function Home() {
 
     return () => unsubscribe();
 
-  }, [firestore, showAdminPanel]);
+  }, [firestore, isDevAdmin]);
 
 
   // Admin Accounts Listener
@@ -321,7 +311,7 @@ export default function Home() {
   };
   
   const handleAdminUpdateTransaction = async (userId: string, transactionId: string, dataToUpdate: Partial<TransactionData>): Promise<boolean> => {
-    if (!firestore || !isAdmin) return false;
+    if (!firestore || !isDevAdmin) return false;
     
     const collectionPath = `artifacts/${appId}/users/${userId}/transactions`;
     const docRef = doc(firestore, collectionPath, transactionId);
@@ -342,7 +332,7 @@ export default function Home() {
   };
 
   const handleSaveAccount = (accountData: Omit<AdminAccountData, 'updatedBy' | 'timestamp'>) => {
-    if (!user || !firestore || !isAdmin) {
+    if (!user || !firestore || !isDevAdmin) {
         toast({ variant: "destructive", title: "Error de Permisos", description: "Solo los administradores pueden guardar cuentas." });
         return Promise.resolve(false);
     }
@@ -373,7 +363,7 @@ export default function Home() {
   };
 
   const handleDeleteAccount = (id: string) => {
-    if (!firestore || !isAdmin) {
+    if (!firestore || !isDevAdmin) {
        toast({ variant: "destructive", title: "Error de Permisos", description: "Solo los administradores pueden eliminar cuentas." });
        return;
     }
@@ -416,7 +406,7 @@ export default function Home() {
             </div>
           ) : (
             <>
-              {showAdminPanel && (
+              {isDevAdmin && (
                 <AdminPanel
                   liveRates={liveRates}
                   derivedRates={derived}
@@ -464,3 +454,5 @@ export default function Home() {
     </>
   );
 }
+
+    
