@@ -248,7 +248,12 @@ export default function Home() {
     <>
       <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans" style={{ backgroundColor: 'var(--background-color)', color: 'var(--text-color)' }}>
         <div className="max-w-4xl mx-auto">
-          <Header userId={user?.uid} authStatus={authStatus} />
+          <Header 
+            userId={user?.uid} 
+            authStatus={authStatus} 
+            rates={calculatedRates}
+            isLoading={isLoading.rates}
+          />
           
           { isPageLoading ? (
              <div className="space-y-8">
@@ -301,4 +306,3 @@ export default function Home() {
     </>
   );
 }
-

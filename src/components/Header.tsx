@@ -2,21 +2,23 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import RateTicker from "./RateTicker";
+import type { CalculatedRates } from "@/lib/types";
 
 type HeaderProps = {
   userId?: string;
   authStatus: string;
+  rates: CalculatedRates;
+  isLoading: boolean;
 };
 
-const Header = ({ userId, authStatus }: HeaderProps) => {
+const Header = ({ userId, authStatus, rates, isLoading }: HeaderProps) => {
   return (
     <header className="text-center mb-8">
       <h1 className="text-4xl font-extrabold text-foreground mb-2">
         Calculadora de Cambios
       </h1>
-      <p className="text-muted-foreground">
-        Muestra cintillo con tasas de cambio en tiempo real
-      </p>
+      <RateTicker rates={rates} isLoading={isLoading} />
       {userId ? (
         <div className="mt-4 inline-block">
           <Badge variant="outline" className="border-yellow-400 bg-yellow-50 text-yellow-900">
