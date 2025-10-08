@@ -1,0 +1,181 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the Global Exchange Hub application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the user entity."
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "AdminAccount": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "AdminAccount",
+      "type": "object",
+      "description": "Represents an administrator's bank account for receiving payments.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the admin account entity."
+        },
+        "bankName": {
+          "type": "string",
+          "description": "Name of the bank."
+        },
+        "accountHolder": {
+          "type": "string",
+          "description": "Name of the account holder."
+        },
+        "accountNumber": {
+          "type": "string",
+          "description": "Account number."
+        },
+        "rut": {
+          "type": "string",
+          "description": "RUT/Cédula of the account holder."
+        },
+        "accountType": {
+          "type": "string",
+          "description": "Type of account (e.g., Cuenta Corriente, Cuenta Vista)."
+        },
+        "email": {
+          "type": "string",
+          "description": "Email associated with the account (optional).",
+          "format": "email"
+        },
+        "updatedBy": {
+          "type": "string",
+          "description": "Reference to User who last updated the account details. (Relationship: User 1:N AdminAccount)"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Timestamp of the last update.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "bankName",
+        "accountHolder",
+        "accountNumber",
+        "rut",
+        "accountType",
+        "updatedBy",
+        "timestamp"
+      ]
+    },
+    "Transaction": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Transaction",
+      "type": "object",
+      "description": "Represents a currency exchange transaction.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the transaction entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User who initiated the transaction. (Relationship: User 1:N Transaction)"
+        },
+        "fromCurrency": {
+          "type": "string",
+          "description": "Currency being sent (e.g., CLP, VES, WLD, USDT)."
+        },
+        "toCurrency": {
+          "type": "string",
+          "description": "Currency being received (e.g., CLP, VES, WLD, USDT)."
+        },
+        "amountSend": {
+          "type": "number",
+          "description": "Amount of currency being sent."
+        },
+        "amountReceive": {
+          "type": "number",
+          "description": "Amount of currency being received."
+        },
+        "rate": {
+          "type": "number",
+          "description": "Exchange rate used for the transaction."
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Timestamp of the transaction.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "fromCurrency",
+        "toCurrency",
+        "amountSend",
+        "amountReceive",
+        "rate",
+        "timestamp"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "artifacts/{appId}/users/{userId}/transactions/{transactionId}",
+        "definition": {
+          "entityName": "Transaction",
+          "schema": {
+            "$ref": "#/backend/entities/Transaction"
+          },
+          "description": "Stores transaction data for individual users. Secured via path-based ownership. Only the user with the matching {userId} can access this data.",
+          "params": [
+            {
+              "name": "appId",
+              "description": "The application ID."
+            },
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            },
+            {
+              "name": "transactionId",
+              "description": "The unique identifier of the transaction."
+            }
+          ]
+        }
+      },
+      {
+        "path": "artifacts/{appId}/public/data/admin_accounts/{accountId}",
+        "definition": {
+          "entityName": "AdminAccount",
+          "schema": {
+            "$ref": "#/backend/entities/AdminAccount"
+          },
+          "description": "Stores bank account details managed by admins. These are publicly readable for facilitating transactions.",
+          "params": [
+            {
+              "name": "appId",
+              "description": "The application ID."
+            },
+            {
+              "name": "accountId",
+              "description": "The unique identifier of the admin account."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to securely manage user transactions and admin accounts for the Global Exchange Hub. It emphasizes authorization independence and clear data segregation.\n\n*   **User Transactions:** Transactions are stored under `/artifacts/{appId}/users/{userId}/transactions`. This structure provides path-based ownership, meaning only the user with the matching `userId` can access their transactions. This simplifies security rules and ensures data privacy. There is no need to denormalize data.\n*   **Admin Accounts:** Admin account details are stored publicly under `/artifacts/{appId}/public/data/admin_accounts`. Since these accounts are managed by the application itself and read by all users, storing them in a public collection simplifies access and management. Security rules ensure only authenticated users can create/modify the data. This information includes bank details for the application (not the end-users). There is no need to denormalize data.\n\nThis structure achieves Authorization Independence by avoiding `get()` calls in security rules. User transactions are secured via path-based ownership, eliminating the need to fetch parent document data. Admin accounts are stored publicly, so no authorization checks are required during read operations. This allows for atomic operations (transactions/batches) without complex authorization logic. It also supports the required QAPs by using segregation and path-based ownership for private user data and public collections for shared data."
+  }
+}
