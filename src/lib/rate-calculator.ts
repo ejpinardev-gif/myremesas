@@ -33,7 +33,7 @@ export function calculateFullRates(liveRates: ExchangeRates | null): { rates: Ca
     
     // --- 3. CLP <-> USDT ---
     if (CLP_to_USDT_P2P) {
-        const finalUsdtToClp = CLP_to_USDT_P2P * (1 + MARGIN_RATE_USDT_CLP);
+        const finalUsdtToClp = Math.ceil((CLP_to_USDT_P2P * (1 + MARGIN_RATE_USDT_CLP)) * 100) / 100;
         const finalClpToUsdt = 1 / finalUsdtToClp;
         calculatedRates['CLP_to_USDT'] = finalClpToUsdt;
         calculatedRates['USDT_to_CLP'] = finalUsdtToClp;

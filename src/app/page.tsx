@@ -58,7 +58,9 @@ export default function Home() {
       if (isNaN(amount) || amount <= 0 || !currentRate) {
           return 0;
       }
-      return amount * currentRate;
+      const calculatedAmount = amount * currentRate;
+      // Redondear hacia arriba a 2 decimales
+      return Math.ceil(calculatedAmount * 100) / 100;
   }, [amountSend, currentRate]);
 
   // --- EFFECTS ---
@@ -299,3 +301,4 @@ export default function Home() {
     </>
   );
 }
+

@@ -10,10 +10,10 @@ export function formatCurrency(value: number, currencyCode: string): string {
 
   try {
     if (currencyCode === 'WLD') {
-      return `${value.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 8 })} WLD`;
+      return `${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} WLD`;
     }
     if (currencyCode === 'USDT') {
-       return `${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDT`;
+       return `${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`;
     }
     if (currencyCode === 'VES') {
        return value.toLocaleString('es-VE', { style: 'currency', currency: 'VES', minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -23,6 +23,9 @@ export function formatCurrency(value: number, currencyCode: string): string {
     }
   } catch (e) {
     // Fallback for environments without full ICU support
+    if (currencyCode === 'CLP') {
+      return `${value.toFixed(0)} ${currencyCode}`;
+    }
     return `${value.toFixed(2)} ${currencyCode}`;
   }
 
