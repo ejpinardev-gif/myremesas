@@ -99,6 +99,10 @@ const AdminTransactionItem = ({
     
     await onUpdateTransaction(transaction.userId, transaction.id, dataToUpdate);
   };
+  
+  const recipient = transaction.recipient;
+  const isVenezuelanRecipient = recipient?.paymentMethod;
+  const isChileanRecipient = recipient?.rut && !recipient.cedula;
 
   return (
     <AccordionItem value={transaction.id} className="border-b">
@@ -140,13 +144,26 @@ const AdminTransactionItem = ({
             {/* Recipient Details */}
             <div className="space-y-1">
                 <h4 className="font-semibold text-sm mb-2">Datos del Destinatario ({transaction.toCurrency})</h4>
-                {transaction.recipient ? (
+                {recipient ? (
                     <>
-                        <DetailRow label="Nombre Completo" value={transaction.recipient.fullName} isCopyable />
-                        <DetailRow label="Cédula" value={transaction.recipient.cedula} isCopyable />
-                        <DetailRow label="Banco" value={transaction.recipient.bank} />
-                        {transaction.recipient.paymentMethod === 'bank' && <DetailRow label="N° Cuenta" value={transaction.recipient.accountNumber} isCopyable />}
-                        {transaction.recipient.paymentMethod === 'pagoMovil' && <DetailRow label="Teléfono" value={transaction.recipient.phoneNumber} isCopyable />}
+                       {isVenezuelanRecipient && (
+                         <>
+                            <DetailRow label="Nombre Completo" value={recipient.fullName} isCopyable />
+                            <DetailRow label="Cédula" value={recipient.cedula} isCopyable />
+                            <DetailRow label="Banco" value={recipient.bank} />
+                            {recipient.paymentMethod === 'bank' && <DetailRow label="N° Cuenta" value={recipient.accountNumber} isCopyable />}
+                            {recipient.paymentMethod === 'pagoMovil' && <DetailRow label="Teléfono" value={recipient.phoneNumber} isCopyable />}
+                         </>
+                       )}
+                       {isChileanRecipient && (
+                         <>
+                            <DetailRow label="Nombre Completo" value={recipient.fullName} isCopyable />
+                            <DetailRow label="RUT" value={recipient.rut} isCopyable />
+                            <DetailRow label="Banco" value={recipient.bank} />
+                            <DetailRow label="Tipo Cuenta" value={recipient.accountType} />
+                            <DetailRow label="N° Cuenta" value={recipient.accountNumber} isCopyable />
+                         </>
+                       )}
                     </>
                 ) : (
                     <p className="text-xs text-muted-foreground">No se proporcionaron datos de destinatario.</p>
@@ -220,3 +237,5 @@ const AdminTransactionManager = ({
 };
 
 export default AdminTransactionManager;
+
+    

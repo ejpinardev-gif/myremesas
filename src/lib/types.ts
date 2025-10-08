@@ -15,12 +15,16 @@ export interface CalculatedRates {
 }
 
 export type RecipientData = {
-  paymentMethod: 'bank' | 'pagoMovil';
-  fullName: string;
-  cedula: string;
-  bank: string;
+  // Venezuela recipient
+  paymentMethod?: 'bank' | 'pagoMovil';
+  fullName?: string;
+  cedula?: string;
+  bank?: string;
   accountNumber?: string;
   phoneNumber?: string;
+  // Chile recipient
+  rut?: string;
+  accountType?: string;
 };
 
 export type TransactionStatus = 'pending' | 'processing' | 'completed' | 'cancelled';
@@ -68,3 +72,5 @@ export interface AdminAccountData {
   updatedBy: string;
   timestamp: Timestamp;
 }
+
+    

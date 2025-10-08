@@ -17,6 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Copy, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import RecipientForm from "./RecipientForm";
+import ChileanRecipientForm from "./ChileanRecipientForm";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 
@@ -76,8 +77,11 @@ const PaymentModal = ({
   
   const { fromCurrency, toCurrency, amountSend, amountReceive } = transaction;
 
-  const requiresRecipientInfo = toCurrency === "VES";
-  const [step, setStep] = useState(1); // 1: Recipient (if VES), 2: Payment, 3: Confirmation
+  const requiresVenezuelanRecipientInfo = toCurrency === "VES";
+  const requiresChileanRecipientInfo = fromCurrency === 'WLD' && toCurrency === 'CLP';
+  const requiresRecipientInfo = requiresVenezuelanRecipientInfo || requiresChileanRecipientInfo;
+
+  const [step, setStep] = useState(1); // 1: Recipient (if needed), 2: Payment, 3: Confirmation
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newTransactionId, setNewTransactionId] = useState<string | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
@@ -85,7 +89,7 @@ const PaymentModal = ({
 
   useEffect(() => {
     if (isOpen) {
-      // If currency is not VES, we skip recipient step
+      // If no recipient info is needed, skip to payment step
       setStep(requiresRecipientInfo ? 1 : 2);
       setNewTransactionId(null);
       setReceiptFile(null);
@@ -117,10 +121,10 @@ const PaymentModal = ({
 
     setIsSubmitting(true);
     
-    // Determine the transaction ID we're working with
     let txId = newTransactionId;
 
-    // This case handles non-VES transactions where the tx isn't saved until this step
+    // This case handles transactions where recipient info wasn't needed
+    // so the transaction isn't saved until this step
     if (!txId) {
       const createdTxId = await onSaveTransaction({} as RecipientData); // Pass empty object as recipient is not needed
       if(createdTxId) {
@@ -199,7 +203,10 @@ const PaymentModal = ({
   };
 
   const getTitle = () => {
-    if (step === 1) return `Datos del Destinatario (${toCurrency})`;
+    if (step === 1) {
+      if(requiresVenezuelanRecipientInfo) return `Datos del Destinatario (${toCurrency})`;
+      if(requiresChileanRecipientInfo) return `Datos para Recibir Pago (${toCurrency})`;
+    }
     if (step === 2) return "Realiza tu Pago";
     if (step === 3) return "Transacción en Proceso";
     return "Detalles de la Transacción";
@@ -212,8 +219,12 @@ const PaymentModal = ({
           <DialogTitle className="text-2xl">{getTitle()}</DialogTitle>
         </DialogHeader>
 
-        {step === 1 && requiresRecipientInfo && (
+        {step === 1 && requiresVenezuelanRecipientInfo && (
           <RecipientForm onSubmit={handleRecipientFormSubmit} onBack={handleClose} />
+        )}
+        
+        {step === 1 && requiresChileanRecipientInfo && (
+          <ChileanRecipientForm onSubmit={handleRecipientFormSubmit} onBack={handleClose} />
         )}
         
         {step === 2 && (
@@ -260,3 +271,5 @@ const PaymentModal = ({
 };
 
 export default PaymentModal;
+
+    
