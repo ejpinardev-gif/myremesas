@@ -12,13 +12,10 @@ const Header = ({ userId, authStatus }: HeaderProps) => {
   return (
     <header className="text-center mb-8">
       <h1 className="text-4xl font-extrabold text-foreground mb-2">
-        Remesas{" "}
-        <span className="bg-gradient-to-r from-blue-700 to-cyan-500 text-transparent bg-clip-text">
-          CLP / VES / WLD / USDT
-        </span>
+        Calculadora de Cambios
       </h1>
       <p className="text-muted-foreground">
-        Calculadora de Intercambio y Registro de Transacciones
+        Intercambio y Registro de Transacciones para CLP / VES / WLD / USDT
       </p>
       {userId ? (
         <div className="mt-4 inline-block">
@@ -35,5 +32,3 @@ const Header = ({ userId, authStatus }: HeaderProps) => {
 };
 
 export default Header;
-
-    
