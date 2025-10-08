@@ -12,7 +12,7 @@ import { collection, query, onSnapshot, serverTimestamp, doc, addDoc, deleteDoc,
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
-import type { Currency, ExchangeRates, CalculatedRates, Transaction, AdminAccount, TransactionData, AdminAccountData, RecipientData, FullTransaction } from "@/lib/types";
+import type { Currency, ExchangeRates, CalculatedRates, Transaction, AdminAccount, TransactionData, RecipientData, FullTransaction } from "@/lib/types";
 import { getDynamicRates } from "@/app/actions";
 import { calculateFullRates } from "@/lib/rate-calculator";
 import { uploadFile as uploadFileAction } from "@/app/actions";
@@ -43,6 +43,7 @@ export default function Home() {
   const [allTransactions, setAllTransactions] = useState<FullTransaction[]>([]);
   const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
   const [isLoading, setIsLoading] = useState({ rates: true, history: true, accounts: true, adminHistory: true });
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // UI STATE
   const [amountSend, setAmountSend] = useState<string>("10000");
@@ -67,14 +68,23 @@ export default function Home() {
 
   // --- EFFECTS ---
 
-  // Auth Effect
+  // Auth & Admin Check Effect
   useEffect(() => {
     if (!isUserLoading) {
       if (user) {
         setAuthStatus("Autenticado. Listo para usar.");
+        user.getIdTokenResult().then(idTokenResult => {
+          const claims = idTokenResult.claims;
+          if (claims.admin) {
+            setIsAdmin(true);
+          } else {
+            setIsAdmin(false);
+          }
+        });
       } else {
         setAuthStatus("Autenticando...");
         initiateAnonymousSignIn(auth);
+        setIsAdmin(false);
       }
     }
   }, [user, isUserLoading, auth]);
@@ -133,8 +143,12 @@ export default function Home() {
   
   // All Transactions Listener (for Admin)
   useEffect(() => {
-    if (!user || !firestore) return;
-    // TODO: Add a check to see if user is an admin before subscribing
+    if (!user || !firestore || !isAdmin) {
+      setIsLoading(prev => ({ ...prev, adminHistory: false }));
+      setAllTransactions([]);
+      return;
+    }
+    
     setIsLoading(prev => ({ ...prev, adminHistory: true }));
     const transactionsGroup = collectionGroup(firestore, 'transactions');
 
@@ -162,7 +176,7 @@ export default function Home() {
 
     return () => unsubscribe();
 
-  }, [user, firestore]);
+  }, [user, firestore, isAdmin]);
 
 
   // Admin Accounts Listener
@@ -293,7 +307,7 @@ export default function Home() {
   };
   
   const handleAdminUpdateTransaction = async (userId: string, transactionId: string, dataToUpdate: Partial<TransactionData>): Promise<boolean> => {
-    if (!firestore) return false;
+    if (!firestore || !isAdmin) return false;
     
     const collectionPath = `artifacts/${appId}/users/${userId}/transactions`;
     const docRef = doc(firestore, collectionPath, transactionId);
@@ -314,8 +328,8 @@ export default function Home() {
   };
 
   const handleSaveAccount = (accountData: Omit<AdminAccountData, 'updatedBy' | 'timestamp'>) => {
-    if (!user || !firestore) {
-        toast({ variant: "destructive", title: "Error de Autenticación", description: "Debes iniciar sesión para guardar una cuenta." });
+    if (!user || !firestore || !isAdmin) {
+        toast({ variant: "destructive", title: "Error de Permisos", description: "Solo los administradores pueden guardar cuentas." });
         return Promise.resolve(false);
     }
     
@@ -345,7 +359,10 @@ export default function Home() {
   };
 
   const handleDeleteAccount = (id: string) => {
-    if (!firestore) return;
+    if (!firestore || !isAdmin) {
+       toast({ variant: "destructive", title: "Error de Permisos", description: "Solo los administradores pueden eliminar cuentas." });
+       return;
+    }
     if (!window.confirm(`¿Estás seguro de que quieres eliminar esta cuenta?`)) return;
 
     const collectionPath = `artifacts/${appId}/public/data/admin_accounts`;
@@ -385,17 +402,19 @@ export default function Home() {
             </div>
           ) : (
             <>
-              <AdminPanel
-                liveRates={liveRates}
-                derivedRates={derived}
-                savedAccounts={adminAccounts}
-                onSaveAccount={handleSaveAccount}
-                onDeleteAccount={handleDeleteAccount}
-                isLoading={isLoading.rates || isLoading.accounts || isLoading.adminHistory}
-                allTransactions={allTransactions}
-                onAdminUpdateTransaction={handleAdminUpdateTransaction}
-                uploadFile={uploadFile}
-              />
+              {isAdmin && (
+                <AdminPanel
+                  liveRates={liveRates}
+                  derivedRates={derived}
+                  savedAccounts={adminAccounts}
+                  onSaveAccount={handleSaveAccount}
+                  onDeleteAccount={handleDeleteAccount}
+                  isLoading={isLoading.rates || isLoading.accounts || isLoading.adminHistory}
+                  allTransactions={allTransactions}
+                  onAdminUpdateTransaction={handleAdminUpdateTransaction}
+                  uploadFile={uploadFile}
+                />
+              )}
 
               <main className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <ExchangeCalculator

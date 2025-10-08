@@ -30,7 +30,7 @@ type AdminPanelProps = {
 const AdminPanel = (props: AdminPanelProps) => {
   return (
     <div className="mb-8">
-      <Accordion type="single" collapsible className="w-full">
+      <Accordion type="single" collapsible className="w-full" defaultValue="admin-panel">
         <AccordionItem value="admin-panel" className="border-b-0">
           <AccordionTrigger className="w-full py-2 px-4 text-sm font-medium rounded-lg bg-card border shadow-sm hover:bg-muted/80 no-underline hover:no-underline justify-center [&[data-state=open]>svg]:rotate-180">
             <span className="text-center">Panel de Administración</span>
