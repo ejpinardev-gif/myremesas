@@ -1,10 +1,6 @@
 const fs = require('fs');
 const path = require('path');
 
-console.log('--- DEBUG: LISTANDO TODAS LAS VARIABLES DE ENTORNO ---');
-console.log(process.env);
-console.log('--- FIN DEBUG ---');
-
 console.log('Starting build script...');
 
 // Obtener las variables de entorno de Vercel
