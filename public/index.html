@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Intercambio y Remesas (CLP/VES/WLD)</title>
+    <!-- Carga de Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Fondo claro */
+        }
+        .crypto-gradient {
+            background: linear-gradient(90deg, #1e3a8a, #0e7490); /* Azul profundo a cian */
+        }
+        .card-shadow {
+            box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        /* Estilos del Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            max-width: 90%;
+            width: 500px;
+            max-height: 90%;
+            overflow-y: auto;
+            transform: translateY(0);
+            transition: transform 0.3s ease-out;
+        }
+        .account-detail {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px dashed #e5e7eb;
+        }
+        .account-detail:last-child {
+            border-bottom: none;
+        }
+         /* Animación para el botón de copiado */
+        .copy-feedback {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #2dd4bf;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+
+    <div id="app" class="max-w-4xl mx-auto">
+        <!-- Encabezado y ID de Usuario -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-extrabold text-gray-900 mb-2">Remesas <span class="crypto-gradient text-transparent bg-clip-text">CLP / VES / WLD / USDT</span></h1>
+            <p class="text-gray-500">Calculadora de Intercambio y Registro de Transacciones</p>
+            <div class="mt-4 p-2 bg-yellow-100 text-yellow-800 rounded-lg text-sm font-medium hidden" id="user-id-display">
+                <span class="font-bold">ID de Usuario:</span> <span id="user-id"></span>
+            </div>
+            <p id="auth-status" class="text-sm text-red-500 mt-2">Inicializando...</p>
+        </header>
+
+        <!-- Panel de Administración de Tasas y Cuentas -->
+        <div id="admin-toggle-container" class="mb-6 hidden"> <!-- Oculto por defecto -->
+            <button id="toggle-admin-button" class="w-full py-2 px-4 text-sm font-medium rounded-lg text-gray-700 bg-gray-200 hover:bg-gray-300 transition duration-300">
+                Mostrar Panel de Administración
+            </button>
+        </div>
+
+        <div id="admin-panel" class="p-6 bg-yellow-50 border-2 border-yellow-200 rounded-xl card-shadow mb-8 hidden">
+            <h2 class="text-xl font-semibold mb-4 text-yellow-800">Panel de Configuración</h2>
+            
+            <!-- SECCIÓN 1: TASAS DE MERCADO (SOLO LECTURA) -->
+            <section class="mb-6 border-b border-yellow-200 pb-4">
+                <h3 class="text-lg font-bold text-yellow-900 mb-3">Tasas de Referencia de Mercado</h3>
+                <p id="rate-fetch-status" class="text-sm text-yellow-700 mb-4 font-semibold">
+                    Conectando con APIs públicas...
+                </p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div class="p-3 bg-yellow-100 rounded-lg">
+                        <h4 class="font-bold text-sm text-yellow-900 mb-1">WLD/CLP (Desc. 14%)</h4>
+                        <p id="wld-usdt-display" class="text-xs text-gray-600">WLD/USDT (CoinGecko): Cargando...</p>
+                        <p id="usdt-clp-p2p-wld-display" class="text-xs text-gray-600">USDT/CLP (Referencia): Cargando...</p>
+                    </div>
+
+                    <div class="p-3 bg-yellow-100 rounded-lg">
+                        <h4 class="font-bold text-sm text-yellow-900 mb-1">CLP/VES (Desc. 8%)</h4>
+                        <p id="clp-usdt-p2p-display" class="text-xs text-gray-600">USDT/CLP (CoinGecko): Cargando...</p>
+                        <p id="ves-usdt-p2p-display" class="text-xs text-gray-600">USDT/VES (CoinGecko): Cargando...</p>
+                    </div>
+
+                    <div class="p-3 bg-yellow-100 rounded-lg">
+                        <h4 class="font-bold text-sm text-yellow-900 mb-1">USDT/CLP (Margen +0.4%)</h4>
+                        <p id="usdt-clp-margin-display" class="text-xs text-gray-600">USDT/CLP Tasa: Calculando...</p>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- SECCIÓN 2: GESTIÓN DE CUENTAS BANCARIAS DEL ADMINISTRADOR -->
+            <section class="border-b border-yellow-200 pb-4">
+                <h3 class="text-lg font-bold text-yellow-900 mb-3">Añadir Nueva Cuenta (CLP)</h3>
+                <p class="text-sm text-yellow-700 mb-4">Ingrese una cuenta de destino donde el usuario transferirá CLP.</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input type="text" id="admin-account-holder" class="p-2 border border-yellow-300 rounded-lg text-sm" placeholder="Titular de la Cuenta" value="Ender Javier Piña Rojas">
+                    <input type="text" id="admin-rut" class="p-2 border border-yellow-300 rounded-lg text-sm" placeholder="RUT/Cédula" value="26728535-7">
+                    <select id="admin-bank-name" class="p-2 border border-yellow-300 rounded-lg text-sm bg-white">
+                        <option value="">-- Seleccione Banco --</option>
+                        <option value="Banco Estado">Banco Estado</option>
+                        <option value="Banco de Chile">Banco de Chile</option>
+                        <option value="Santander">Santander</option>
+                        <option value="Scotiabank">Scotiabank</option>
+                        <option value="Mercado Pago">Mercado Pago</option>
+                        <option value="Global66">Global66</option>
+                        <option value="Otro">Otro</option>
+                    </select>
+                    <select id="admin-account-type" class="p-2 border border-yellow-300 rounded-lg text-sm bg-white">
+                        <option value="">-- Seleccione Tipo --</option>
+                        <option value="Cuenta Corriente">Cuenta Corriente</option>
+                        <option value="Cuenta Vista">Cuenta Vista</option>
+                    </select>
+                    <input type="text" id="admin-account-number" class="p-2 border border-yellow-300 rounded-lg text-sm md:col-span-2" placeholder="Número de Cuenta">
+                    <input type="email" id="admin-email" class="p-2 border border-yellow-300 rounded-lg text-sm md:col-span-2" placeholder="Email (Opcional)">
+                </div>
+                
+                <button id="save-accounts-button" class="mt-4 w-full py-2 bg-yellow-600 text-white font-semibold rounded-lg hover:bg-yellow-700 transition duration-300">
+                    Guardar Nueva Cuenta
+                </button>
+                <p id="account-status" class="text-sm text-center mt-2 text-yellow-800 font-medium">Cuentas cargadas.</p>
+            </section>
+            
+            <!-- LISTA DE CUENTAS GUARDADAS -->
+            <section class="pt-4">
+                <h3 class="text-lg font-bold text-yellow-900 mb-3">Cuentas Guardadas (<span id="account-count">0</span>)</h3>
+                <div id="saved-accounts-list" class="space-y-3 max-h-48 overflow-y-auto pr-2">
+                    <p class="text-sm text-gray-500">No hay cuentas configuradas.</p>
+                </div>
+            </section>
+        </div>
+
+        <!-- Contenedor Principal: Calculadora y Historial -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+            <!-- Columna 1 & 2: Calculadora de Intercambio -->
+            <div class="lg:col-span-2 p-6 bg-white rounded-xl card-shadow">
+                <h2 class="text-2xl font-semibold mb-6 text-gray-800">Calculadora de Intercambio</h2>
+
+                <div class="space-y-4">
+                    <!-- MONTO A ENVIAR -->
+                    <div>
+                        <label for="amount-send" class="block text-sm font-medium text-gray-700 mb-1">Monto a Enviar</label>
+                        <input type="number" id="amount-send" value="10" min="1" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-cyan-500 focus:border-cyan-500 text-lg" placeholder="Ej: 100000">
+                    </div>
+
+                    <!-- MONEDA DE ORIGEN -->
+                    <div>
+                        <label for="currency-send" class="block text-sm font-medium text-gray-700 mb-1">Moneda de Origen</label>
+                        <select id="currency-send" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-cyan-500 focus:border-cyan-500 text-lg">
+                            <option value="CLP">CLP (Peso Chileno)</option>
+                            <option value="WLD">WLD (Worldcoin)</option>
+                            <option value="USDT">USDT (Tether)</option>
+                            <option value="VES">VES (Bolívar Soberano)</option>
+                        </select>
+                    </div>
+
+                    <!-- Ícono de Intercambio -->
+                    <div class="text-center py-2">
+                        <button id="swap-button" class="p-2 bg-gray-200 text-gray-600 rounded-full hover:bg-cyan-500 hover:text-white transition duration-200">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 transform rotate-90 md:rotate-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- MONEDA DE DESTINO -->
+                    <div>
+                        <label for="currency-receive" class="block text-sm font-medium text-gray-700 mb-1">Moneda de Destino</label>
+                        <select id="currency-receive" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-cyan-500 focus:border-cyan-500 text-lg">
+                            <option value="VES">VES (Bolívar Soberano)</option>
+                            <option value="CLP">CLP (Peso Chileno)</option>
+                            <option value="USDT">USDT (Tether)</option>
+                            <option value="WLD">WLD (Worldcoin)</option>
+                        </select>
+                    </div>
+
+                </div>
+
+                <!-- Resultado y Tasa -->
+                <div class="mt-6 p-4 bg-cyan-500 text-white rounded-lg">
+                    <p class="text-sm font-medium">Usted Recibirá Aproximadamente:</p>
+                    <p id="amount-receive-display" class="text-3xl font-bold mt-1">0.00 VES</p>
+                    <p id="rate-display" class="text-xs mt-2 opacity-90"></p>
+                </div>
+
+                <!-- Botón de Simulación de Transacción (Ahora Botón de Pago) -->
+                <button id="payment-button" class="mt-6 w-full py-3 bg-cyan-600 text-white text-lg font-semibold rounded-lg hover:bg-cyan-700 transition duration-300 transform active:scale-95 disabled:opacity-50">
+                    Pagar y Ver Detalles de Transferencia
+                </button>
+                <p id="error-message" class="text-red-500 mt-2 text-center text-sm hidden">Error: Las monedas no son válidas para el intercambio.</p>
+            </div>
+
+            <!-- Columna 3: Historial de Transacciones (Firebase Firestore) -->
+            <div class="lg:col-span-1 p-6 bg-white rounded-xl card-shadow">
+                <h2 class="text-2xl font-semibold mb-6 text-gray-800">Historial de Transacciones</h2>
+                <div id="transaction-history" class="space-y-3 h-96 overflow-y-auto pr-2">
+                    <p class="text-gray-500 text-sm" id="loading-history">Cargando historial...</p>
+                    <!-- Las transacciones se cargarán aquí -->
+                </div>
+            </div>
+
+        </div>
+    </div>
+    
+    <!-- MODAL DE PAGO (OCULTO POR DEFECTO) -->
+    <div id="payment-details-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Detalles de la Transferencia</h2>
+
+            <!-- Monto a Transferir (Resumen) -->
+            <div class="p-4 mb-4 bg-red-50 border-l-4 border-red-500 rounded-lg">
+                <p class="text-sm font-medium text-red-700">Monto EXACTO a Transferir (Origen):</p>
+                <p id="modal-amount-send" class="text-3xl font-extrabold text-red-600 mt-1">CLP 0.00</p>
+                <p class="text-xs text-red-500 mt-2">Usted recibirá aproximadamente: <span id="modal-amount-receive">VES 0.00</span></p>
+            </div>
+
+            <!-- Datos de la Cuenta de Destino (Admin) -->
+            <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <h3 class="text-lg font-bold text-gray-700 mb-3">Cuentas Disponibles para Transferencia (<span id="modal-transfer-currency">CLP</span>)</h3>
+                <div id="admin-account-details-container" class="space-y-2 text-sm">
+                    <!-- Aquí se listarán todas las cuentas guardadas -->
+                    <p class="text-gray-500 text-sm" id="no-accounts-message">El administrador no ha configurado cuentas CLP.</p>
+                </div>
+                <p id="modal-crypto-warning" class="text-red-500 text-xs mt-3 hidden">
+                    ¡Advertencia! Está enviando criptomonedas. La dirección de la Wallet será proporcionada por el administrador una vez que confirme su intención de enviar criptomonedas.
+                </p>
+            </div>
+            
+            <p class="text-xs text-gray-500 mt-4 text-center">Una vez realizada la transferencia, envíe el comprobante por WhatsApp/Email al administrador.</p>
+
+            <button id="close-modal-button" class="mt-6 w-full py-3 bg-cyan-600 text-white text-lg font-semibold rounded-lg hover:bg-cyan-700 transition duration-300">
+                Entendido / Cerrar
+            </button>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module" src="main.js" defer></script>
+</body>
+</html>
