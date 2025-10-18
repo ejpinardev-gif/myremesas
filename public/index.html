@@ -213,13 +213,12 @@
                         <p id="rate-display" class="text-xs mt-2 opacity-90"></p>
                     </div>
 
+                    <!-- Botón de Simulación de Transacción (Ahora Botón de Pago) -->
+                    <button id="payment-button" class="mt-6 w-full py-3 bg-cyan-600 text-white text-lg font-semibold rounded-lg hover:bg-cyan-700 transition duration-300 transform active:scale-95 disabled:opacity-50">
+                        Pagar y Ver Detalles de Transferencia
+                    </button>
+                    <p id="error-message" class="text-red-500 mt-2 text-center text-sm hidden">Error: Las monedas no son válidas para el intercambio.</p>
                 </div>
-
-                <!-- Botón de Simulación de Transacción (Ahora Botón de Pago) -->
-                <button id="payment-button" class="mt-6 w-full py-3 bg-cyan-600 text-white text-lg font-semibold rounded-lg hover:bg-cyan-700 transition duration-300 transform active:scale-95 disabled:opacity-50">
-                    Pagar y Ver Detalles de Transferencia
-                </button>
-                <p id="error-message" class="text-red-500 mt-2 text-center text-sm hidden">Error: Las monedas no son válidas para el intercambio.</p>
             </div>
 
             <!-- Columna 3: Historial de Transacciones (Firebase Firestore) -->
