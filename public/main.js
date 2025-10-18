@@ -85,6 +85,9 @@ function initializeDOM() {
     noAccountsMessage = document.getElementById('no-accounts-message');
     modalCryptoWarning = document.getElementById('modal-crypto-warning');
     modalTransferCurrency = document.getElementById('modal-transfer-currency');
+
+    // **CORRECCIÓN**: Evita que el botón de pago envíe el formulario por defecto.
+    if (paymentButton) paymentButton.type = 'button';
 }
 
 // --- Funciones de Utilidad y Firebase ---
