@@ -19,13 +19,13 @@ const FALLBACK_RATES = {
 };
 
 /**
- * Obtiene la tasa P2P de Binance para una moneda fiduciaria usando la API oficial.
+ * Obtiene la tasa P2P de COMPRA de Binance para una moneda fiduciaria.
  * Este es un método no oficial, ya que la API P2P no es pública.
  * Mantenemos una lógica similar pero usando la librería.
  * @param {string} fiat - Código de moneda fiduciaria (CLP o VES).
  * @returns {Promise<number|null>} La tasa P2P o null si falla.
  */
-async function getP2PRate(fiat) {
+async function getP2PBuyRate(fiat) {
   try {
     // La librería `node-binance-api` tiene un método interno para esto.
     // Es más robusto que nuestra llamada manual con axios.
@@ -36,10 +36,31 @@ async function getP2PRate(fiat) {
       return rate;
     }
 
+    console.warn(`No se encontraron ofertas P2P de COMPRA para ${fiat}.`);
+    return null;
+  } catch (error) {
+    console.error(`Error al obtener tasa P2P de COMPRA para ${fiat}:`, error.body || error.message);
+    return null;
+  }
+}
+
+/**
+ * Obtiene la tasa P2P de VENTA de Binance para una moneda fiduciaria.
+ * @param {string} fiat - Código de moneda fiduciaria (VES).
+ * @returns {Promise<number|null>} La tasa P2P o null si falla.
+ */
+async function getP2PSellRate(fiat) {
+  try {
+    const response = await binance.p2p.sell("USDT", fiat, 4); // Pedimos 4 ofertas
+    if (response && response.data && response.data.length > 0) {
+      const rate = parseFloat(response.data[0].adv.price);
+      return rate;
+    }
+
     console.warn(`No se encontraron ofertas P2P para ${fiat}.`);
     return null;
   } catch (error) {
-    console.error(`Error al obtener tasa P2P para ${fiat}:`, error.body || error.message);
+    console.error(`Error al obtener tasa P2P de VENTA para ${fiat}:`, error.body || error.message);
     return null;
   }
 }
@@ -77,18 +98,18 @@ module.exports = async (req, res) => {
 
   try {
     // Llamadas concurrentes para obtener todas las tasas
-    const [spotPrice, clpRate, vesRate] = await Promise.all([
+    const [spotPrice, clpBuyRate, vesSellRate] = await Promise.all([
       getSpotRate(),
-      getP2PRate("CLP"),
-      getP2PRate("VES"),
+      getP2PBuyRate("CLP"),
+      getP2PSellRate("VES"), // Usamos la nueva función para obtener la tasa de venta de VES
     ]);
 
     // Construir la respuesta final, usando el valor real si existe, o el de fallback si no.
     res.status(200).json({
       success: true,
       WLD_to_USDT: spotPrice || FALLBACK_RATES.WLD_to_USDT,
-      USDT_to_CLP_P2P: clpRate || FALLBACK_RATES.USDT_to_CLP_P2P,
-      VES_to_USDT_P2P: vesRate || FALLBACK_RATES.VES_to_USDT_P2P,
+      USDT_to_CLP_P2P: clpBuyRate || FALLBACK_RATES.USDT_to_CLP_P2P,
+      USDT_to_VES_P2P_SELL: vesSellRate || FALLBACK_RATES.VES_to_USDT_P2P, // Nuevo nombre de variable
     });
   } catch (error) {
     console.error("Error general en Vercel Function:", error.message);

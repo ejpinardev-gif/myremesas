@@ -35,7 +35,7 @@ let adminAccounts = [];
 
 // Descuentos y Margenes
 const DISCOUNT_RATE_WLD_CLP = 0.14; // 14% de descuento para WLD/CLP
-const DISCOUNT_RATE_CLP_VES = 0.08; // 8% de descuento para CLP/VES
+const DISCOUNT_RATE_CLP_VES = 0.06; // 6% de descuento para CLP/VES (ACTUALIZADO)
 const MARGIN_RATE_USDT_CLP = 0.004; // 0.4% de margen de incremento para USDT/CLP
 
 // --- DECLARACIÓN DE VARIABLES DEL DOM (INICIALIZACIÓN MOVIDA A initializeDOM) ---
@@ -331,7 +331,7 @@ async function fetchDynamicRates() {
         // Ajusta la lógica para usar la respuesta de tu API de Vercel
         if (data?.success) {
             liveRates.USDT_to_CLP = data.USDT_to_CLP_P2P;
-            liveRates.USDT_to_VES = data.VES_to_USDT_P2P;
+            liveRates.USDT_to_VES = data.USDT_to_VES_P2P_SELL; // Usamos la nueva tasa de venta
             liveRates.WLD_to_USDT = data.WLD_to_USDT;
             
             wldUsdtDisplay.textContent = `WLD/USDT: ${liveRates.WLD_to_USDT.toFixed(4)}`;
@@ -377,9 +377,8 @@ function calculateFullRatesInternal() {
 
     // --- 2. Lógica CLP/VES (Descuento 8%) ---
     if (usdtToClp !== null && usdtToVes !== null) {
-        const clpToBaseUsdtRate = 1 / usdtToClp;
-        const baseClpToVesRate = clpToBaseUsdtRate * usdtToVes;
-        const finalClpToVesRate = baseClpToVesRate * (1 - DISCOUNT_RATE_CLP_VES);
+        const baseClpToVesRate = usdtToClp / usdtToVes; // Tasa base: (CLP/USDT) / (VES/USDT) = CLP/VES
+        const finalClpToVesRate = baseClpToVesRate * (1 - DISCOUNT_RATE_CLP_VES); // Aplicar descuento del 6%
         fullRates['CLP_to_VES'] = finalClpToVesRate;
         fullRates['VES_to_CLP'] = 1 / finalClpToVesRate;
     } else {
@@ -465,7 +464,7 @@ function calculateExchange() {
     if (currencySend === currencyReceive) {
         rateText = "Intercambio 1:1";
     } else if (currencySend === 'CLP' && currencyReceive === 'VES') {
-        rateText = `Tasa de Intercambio CLP/VES (Desc. 8%): 1 CLP = ${rateFixed} VES`;
+        rateText = `Tasa de Intercambio CLP/VES (Desc. 6%): 1 CLP = ${rateFixed} VES`;
     } else if (currencySend === 'WLD' && currencyReceive === 'CLP') {
         rateText = `Tasa de Intercambio WLD/CLP (Desc. 14%): 1 WLD = ${rateFixed} CLP`;
     } else if (currencySend === 'USDT' && currencyReceive === 'CLP') {
