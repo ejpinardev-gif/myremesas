@@ -67,6 +67,10 @@
             opacity: 0;
             transition: opacity 0.3s ease, transform 0.3s ease;
         }
+        /* Fallback para mantener elementos ocultos si Tailwind no carga */
+        .hidden {
+            display: none !important;
+        }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8">
