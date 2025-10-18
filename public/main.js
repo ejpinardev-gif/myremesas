@@ -454,10 +454,6 @@ function calculateExchange(enablePaymentButton = true) {
     const rateKey = `${currencySend}_to_${currencyReceive}`;
     const rate = rates[rateKey];
 
-    if (enablePaymentButton) {
-        paymentButton.disabled = false;
-    }
-    errorMessage.classList.add('hidden');
 
     if (rate === null || typeof rate === 'undefined') {
         amountReceiveDisplay.textContent = "N/A";
@@ -468,6 +464,11 @@ function calculateExchange(enablePaymentButton = true) {
         return;
     }
 
+    // Habilitar el botón solo si se pasa el parámetro y hay un monto válido
+    if (enablePaymentButton && !isNaN(amountSend) && amountSend > 0) {
+        paymentButton.disabled = false;
+    }
+    errorMessage.classList.add('hidden');
     const amountReceive = amountSend * rate;
     const rateFixed = rate.toFixed(currencyReceive === 'WLD' ? 8 : currencyReceive === 'CLP' ? 2 : 4);
     let rateText;
