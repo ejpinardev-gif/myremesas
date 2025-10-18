@@ -517,7 +517,8 @@ async function fetchDynamicRates() {
             liveRates.USDT_to_VES = data.VES_per_USDT_SELL; // Usamos la nueva tasa de venta
             liveRates.WLD_to_USDT = data.WLD_to_USDT;
             
-            wldUsdtDisplay.textContent = `WLD/USDT: ${liveRates.WLD_to_USDT.toFixed(4)}`;
+            const spotSource = data.meta?.spotSource ?? 'spot';
+            wldUsdtDisplay.textContent = `WLD/USDT (${spotSource}): ${liveRates.WLD_to_USDT.toFixed(4)}`;
             clpUsdtP2pDisplay.textContent = `USDT/CLP: 1 USDT = ${liveRates.USDT_to_CLP.toFixed(2)} CLP`;
             usdtClpP2pWldDisplay.textContent = `USDT/CLP: ${liveRates.USDT_to_CLP.toFixed(2)} CLP / USDT`;
             vesUsdtP2pDisplay.textContent = `USDT/VES: 1 USDT = ${liveRates.USDT_to_VES.toFixed(2)} VES`;
