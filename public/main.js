@@ -126,11 +126,14 @@ async function initializeFirebase() {
                 userIdContainer.classList.remove('hidden');
                 authStatus.textContent = "Autenticado. Listo para usar.";
                 isAuthReady = true;
-                setupMarginConfigListener();
 
-                // **MEJORA de Seguridad**: Mostrar panel de admin solo si el UID coincide
-                if (ADMIN_UIDS.includes(userId)) {
+                const isAdminUser = ADMIN_UIDS.includes(userId);
+                if (isAdminUser) {
+                    setupMarginConfigListener();
                     adminToggleContainer.classList.remove('hidden');
+                } else {
+                    marginConfig = { ...DEFAULT_MARGIN_CONFIG };
+                    applyMarginConfigToUI();
                 }
                 
                 setupTransactionListener();
