@@ -354,7 +354,8 @@ async function fetchDynamicRates() {
         rateFetchStatus.textContent = 'Fallo de conexión. Usando tasas de Referencia Fijas.';
     }
 
-    calculateExchange();
+    // **CORRECCIÓN**: Llama al cálculo inicial pero sin habilitar el botón de pago.
+    calculateExchange(false);
 }
 
 
@@ -427,7 +428,7 @@ function calculateFullRatesInternal() {
     return fullRates;
 }
 
-function calculateExchange() {
+function calculateExchange(enablePaymentButton = true) {
     const amountSend = parseFloat(amountSendInput.value);
     const currencySend = currencySendSelect.value;
     const currencyReceive = currencyReceiveSelect.value;
@@ -453,7 +454,9 @@ function calculateExchange() {
     const rateKey = `${currencySend}_to_${currencyReceive}`;
     const rate = rates[rateKey];
 
-    paymentButton.disabled = false;
+    if (enablePaymentButton) {
+        paymentButton.disabled = false;
+    }
     errorMessage.classList.add('hidden');
 
     if (rate === null || typeof rate === 'undefined') {
