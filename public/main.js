@@ -331,7 +331,7 @@ async function fetchDynamicRates() {
         // Ajusta la lógica para usar la respuesta de tu API de Vercel
         if (data?.success) {
             liveRates.USDT_to_CLP = data.USDT_to_CLP_P2P;
-            liveRates.USDT_to_VES = data.USDT_to_VES_P2P_SELL; // Usamos la nueva tasa de venta
+            liveRates.USDT_to_VES = data.VES_per_USDT_SELL; // Usamos la nueva tasa de venta
             liveRates.WLD_to_USDT = data.WLD_to_USDT;
             
             wldUsdtDisplay.textContent = `WLD/USDT: ${liveRates.WLD_to_USDT.toFixed(4)}`;
@@ -377,7 +377,12 @@ function calculateFullRatesInternal() {
 
     // --- 2. Lógica CLP/VES (Descuento 8%) ---
     if (usdtToClp !== null && usdtToVes !== null) {
-        const baseClpToVesRate = usdtToClp / usdtToVes; // Tasa base: (CLP/USDT) / (VES/USDT) = CLP/VES
+        // Lógica correcta para la tasa cruzada:
+        // Para convertir CLP a VES, primero compramos USDT con CLP, luego vendemos esos USDT por VES.
+        // Tasa de compra de USDT con CLP: usdtToClp (ej: 980 CLP por 1 USDT)
+        // Tasa de venta de USDT por VES: usdtToVes (ej: 39 VES por 1 USDT)
+        // La tasa base es (VES por USDT) / (CLP por USDT) = VES por CLP
+        const baseClpToVesRate = usdtToVes / usdtToClp;
         const finalClpToVesRate = baseClpToVesRate * (1 - DISCOUNT_RATE_CLP_VES); // Aplicar descuento del 6%
         fullRates['CLP_to_VES'] = finalClpToVesRate;
         fullRates['VES_to_CLP'] = 1 / finalClpToVesRate;

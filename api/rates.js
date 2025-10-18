@@ -52,8 +52,12 @@ async function getP2PBuyRate(fiat) {
 async function getP2PSellRate(fiat) {
   try {
     const response = await binance.p2p.sell("USDT", fiat, 4); // Pedimos 4 ofertas
-    if (response && response.data && response.data.length > 0) {
-      const rate = parseFloat(response.data[0].adv.price);
+    // Para obtener la 4ta oferta, necesitamos asegurarnos de que la API devolvió al menos 4.
+    // El índice para el cuarto elemento es 3.
+    if (response && response.data && response.data.length >= 4) {
+      // Accedemos al cuarto elemento de la lista (índice 3)
+      const fourthOffer = response.data[3];
+      const rate = parseFloat(fourthOffer.adv.price);
       return rate;
     }
 
@@ -109,7 +113,7 @@ module.exports = async (req, res) => {
       success: true,
       WLD_to_USDT: spotPrice || FALLBACK_RATES.WLD_to_USDT,
       USDT_to_CLP_P2P: clpBuyRate || FALLBACK_RATES.USDT_to_CLP_P2P,
-      USDT_to_VES_P2P_SELL: vesSellRate || FALLBACK_RATES.VES_to_USDT_P2P, // Nuevo nombre de variable
+      VES_per_USDT_SELL: vesSellRate || FALLBACK_RATES.VES_to_USDT_P2P, // Renombrado para mayor claridad
     });
   } catch (error) {
     console.error("Error general en Vercel Function:", error.message);
