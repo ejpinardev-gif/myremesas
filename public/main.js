@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, doc, addDoc, onSnapshot, collection, query, serverTimestamp, setLogLevel, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getFirestore, doc, addDoc, onSnapshot, collection, query, serverTimestamp, setLogLevel, deleteDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // Establecer nivel de log para depuraci贸n de Firestore
 setLogLevel('Debug');
@@ -33,13 +33,17 @@ let liveRates = {
 // Cuentas de destino del administrador
 let adminAccounts = []; 
 
-// Descuentos y Margenes
-const DISCOUNT_RATE_WLD_CLP = 0.14; // 14% de descuento para WLD/CLP
-const DISCOUNT_RATE_CLP_VES = 0.06; // 6% de descuento para CLP/VES (ACTUALIZADO)
-const MARGIN_RATE_USDT_CLP = 0.004; // 0.4% de margen de incremento para USDT/CLP
+// Configuraci贸n de m谩rgenes (se puede sobrescribir desde Firestore)
+const DEFAULT_MARGIN_CONFIG = {
+    discountWldClp: 0.14,
+    discountClpVes: 0.06,
+    marginUsdtClp: 0.004,
+};
+let marginConfig = { ...DEFAULT_MARGIN_CONFIG };
+let marginConfigUnsubscribe = null;
 
 // --- DECLARACI脫N DE VARIABLES DEL DOM (INICIALIZACI脫N MOVIDA A initializeDOM) ---
-let userIdDisplay, userIdContainer, authStatus, amountSendInput, currencySendSelect, currencyReceiveSelect, swapButton, amountReceiveDisplay, rateDisplay, paymentButton, errorMessage, historyContainer, loadingHistory, adminPanel, toggleAdminButton, rateFetchStatus, savedAccountsList, accountCount, wldUsdtDisplay, usdtClpP2pWldDisplay, clpUsdtP2pDisplay, vesUsdtP2pDisplay, usdtClpMarginDisplay, adminBankNameInput, adminAccountHolderInput, adminAccountNumberInput, adminRutInput, adminAccountTypeInput, adminEmailInput, saveAccountsButton, accountStatus, paymentModal, closeModalButton, modalAmountSend, modalAmountReceive, adminAccountDetailsContainer, noAccountsMessage, modalCryptoWarning, modalTransferCurrency, adminToggleContainer;
+let userIdDisplay, userIdContainer, authStatus, amountSendInput, currencySendSelect, currencyReceiveSelect, swapButton, amountReceiveDisplay, rateDisplay, paymentButton, errorMessage, historyContainer, loadingHistory, adminPanel, toggleAdminButton, rateFetchStatus, savedAccountsList, accountCount, wldUsdtDisplay, usdtClpP2pWldDisplay, clpUsdtP2pDisplay, vesUsdtP2pDisplay, usdtClpMarginDisplay, adminBankNameInput, adminAccountHolderInput, adminAccountNumberInput, adminRutInput, adminAccountTypeInput, adminEmailInput, saveAccountsButton, accountStatus, paymentModal, closeModalButton, modalAmountSend, modalAmountReceive, adminAccountDetailsContainer, noAccountsMessage, modalCryptoWarning, modalTransferCurrency, adminToggleContainer, marginWldClpInput, marginClpVesInput, marginUsdtClpInput, saveMarginsButton, marginStatus, marginWldClpLabel, marginClpVesLabel, marginUsdtClpLabel;
 
 /**
  * Inicializa todas las referencias a los elementos del DOM.
@@ -85,9 +89,19 @@ function initializeDOM() {
     noAccountsMessage = document.getElementById('no-accounts-message');
     modalCryptoWarning = document.getElementById('modal-crypto-warning');
     modalTransferCurrency = document.getElementById('modal-transfer-currency');
+    marginWldClpInput = document.getElementById('margin-wld-clp');
+    marginClpVesInput = document.getElementById('margin-clp-ves');
+    marginUsdtClpInput = document.getElementById('margin-usdt-clp');
+    saveMarginsButton = document.getElementById('save-margins-button');
+    marginStatus = document.getElementById('margin-status');
+    marginWldClpLabel = document.getElementById('margin-wld-clp-label');
+    marginClpVesLabel = document.getElementById('margin-clp-ves-label');
+    marginUsdtClpLabel = document.getElementById('margin-usdt-clp-label');
 
     // **CORRECCI脫N**: Evita que el bot贸n de pago env铆e el formulario por defecto.
     if (paymentButton) paymentButton.type = 'button';
+
+    applyMarginConfigToUI();
 }
 
 // --- Funciones de Utilidad y Firebase ---
@@ -110,8 +124,9 @@ async function initializeFirebase() {
                 userIdContainer.classList.remove('hidden');
                 authStatus.textContent = "Autenticado. Listo para usar.";
                 isAuthReady = true;
+                setupMarginConfigListener();
 
-                // **MEJORA DE SEGURIDAD**: Mostrar panel de admin solo si el UID coincide
+                // **MEJORA de Seguridad**: Mostrar panel de admin solo si el UID coincide
                 if (ADMIN_UIDS.includes(userId)) {
                     adminToggleContainer.classList.remove('hidden');
                 }
@@ -189,7 +204,161 @@ function copyToClipboard(text, element) {
     }
     document.body.removeChild(textArea);
 }
+function getMarginValue(key) {
+    const value = marginConfig[key];
+    if (typeof value === 'number' && !Number.isNaN(value)) {
+        return value;
+    }
+    return DEFAULT_MARGIN_CONFIG[key];
+}
 
+function formatPercent(value) {
+    const percent = value * 100;
+    if (!Number.isFinite(percent)) return '0';
+    return percent.toFixed(2).replace(/\.?0+$/, '');
+}
+
+function hideMarginStatus() {
+    if (!marginStatus) return;
+    marginStatus.classList.add('hidden');
+}
+
+function showMarginStatus(message, isError = false) {
+    if (!marginStatus) return;
+    marginStatus.textContent = message;
+    marginStatus.classList.remove('hidden');
+    if (isError) {
+        marginStatus.classList.add('text-red-600');
+        marginStatus.classList.remove('text-yellow-800');
+    } else {
+        marginStatus.classList.remove('text-red-600');
+        marginStatus.classList.add('text-yellow-800');
+    }
+}
+
+function applyMarginConfigToUI() {
+    const discountWldClp = getMarginValue('discountWldClp');
+    const discountClpVes = getMarginValue('discountClpVes');
+    const marginUsdtClp = getMarginValue('marginUsdtClp');
+
+    const wldPercent = formatPercent(discountWldClp);
+    const clpVesPercent = formatPercent(discountClpVes);
+    const usdtClpPercent = formatPercent(marginUsdtClp);
+
+    if (marginWldClpLabel) marginWldClpLabel.textContent = wldPercent;
+    if (marginClpVesLabel) marginClpVesLabel.textContent = clpVesPercent;
+    if (marginUsdtClpLabel) marginUsdtClpLabel.textContent = usdtClpPercent;
+
+    if (marginWldClpInput && document.activeElement !== marginWldClpInput) {
+        marginWldClpInput.value = wldPercent;
+    }
+    if (marginClpVesInput && document.activeElement !== marginClpVesInput) {
+        marginClpVesInput.value = clpVesPercent;
+    }
+    if (marginUsdtClpInput && document.activeElement !== marginUsdtClpInput) {
+        marginUsdtClpInput.value = usdtClpPercent;
+    }
+
+    hideMarginStatus();
+}
+
+function setupMarginConfigListener() {
+    if (!db || marginConfigUnsubscribe) return;
+
+    const configDocRef = doc(db, MARGIN_CONFIG_COLLECTION, MARGIN_CONFIG_DOC_ID);
+    marginConfigUnsubscribe = onSnapshot(configDocRef, (snapshot) => {
+        if (snapshot.exists()) {
+            const data = snapshot.data();
+            marginConfig = {
+                discountWldClp: typeof data.discountWldClp === 'number' ? data.discountWldClp : DEFAULT_MARGIN_CONFIG.discountWldClp,
+                discountClpVes: typeof data.discountClpVes === 'number' ? data.discountClpVes : DEFAULT_MARGIN_CONFIG.discountClpVes,
+                marginUsdtClp: typeof data.marginUsdtClp === 'number' ? data.marginUsdtClp : DEFAULT_MARGIN_CONFIG.marginUsdtClp,
+            };
+        } else {
+            marginConfig = { ...DEFAULT_MARGIN_CONFIG };
+        }
+        applyMarginConfigToUI();
+        calculateExchange(false);
+    }, (error) => {
+        console.error('Error al escuchar m醨genes:', error);
+    });
+}
+
+function readPercentInput(inputElement, label, fallbackDecimal) {
+    if (!inputElement) return fallbackDecimal;
+    const raw = (inputElement.value ?? '').toString().replace(',', '.').trim();
+    if (raw === '') return fallbackDecimal;
+
+    const numeric = parseFloat(raw);
+    if (!Number.isFinite(numeric)) {
+        throw new Error(`Ingrese un valor num閞ico v醠ido para ${label}.`);
+    }
+    if (numeric < 0 || numeric > 100) {
+        throw new Error(`${label} debe estar entre 0% y 100%.`);
+    }
+    return numeric / 100;
+}
+
+async function saveMarginConfig(event) {
+    if (event) event.preventDefault();
+    if (!isAuthReady || !db) {
+        showMarginStatus('Error: conexi髇 no lista.', true);
+        return;
+    }
+    if (!ADMIN_UIDS.includes(userId)) {
+        showMarginStatus('No autorizado para actualizar m醨genes.', true);
+        return;
+    }
+
+    const currentConfig = {
+        discountWldClp: getMarginValue('discountWldClp'),
+        discountClpVes: getMarginValue('discountClpVes'),
+        marginUsdtClp: getMarginValue('marginUsdtClp'),
+    };
+
+    let discountWldClp;
+    let discountClpVes;
+    let marginUsdtClp;
+    try {
+        discountWldClp = readPercentInput(marginWldClpInput, 'Descuento WLD -> CLP', currentConfig.discountWldClp);
+        discountClpVes = readPercentInput(marginClpVesInput, 'Descuento CLP -> VES', currentConfig.discountClpVes);
+        marginUsdtClp = readPercentInput(marginUsdtClpInput, 'Margen USDT -> CLP', currentConfig.marginUsdtClp);
+    } catch (validationError) {
+        showMarginStatus(validationError.message, true);
+        return;
+    }
+
+    const configDocRef = doc(db, MARGIN_CONFIG_COLLECTION, MARGIN_CONFIG_DOC_ID);
+
+    try {
+        showMarginStatus('Guardando m醨genes...');
+        if (saveMarginsButton) {
+            saveMarginsButton.disabled = true;
+            saveMarginsButton.textContent = 'Guardando...';
+        }
+        await setDoc(configDocRef, {
+            discountWldClp,
+            discountClpVes,
+            marginUsdtClp,
+            updatedAt: serverTimestamp(),
+            updatedBy: userId,
+        }, { merge: true });
+
+        marginConfig = { discountWldClp, discountClpVes, marginUsdtClp };
+        applyMarginConfigToUI();
+        calculateExchange(false);
+        showMarginStatus('M醨genes guardados correctamente.');
+        setTimeout(() => hideMarginStatus(), 3000);
+    } catch (error) {
+        console.error('Error al guardar m醨genes:', error);
+        showMarginStatus(`Error al guardar m醨genes: ${error.message}`, true);
+    } finally {
+        if (saveMarginsButton) {
+            saveMarginsButton.disabled = false;
+            saveMarginsButton.textContent = 'Guardar M醨genes';
+        }
+    }
+}
 // --- L贸gica de Administraci贸n de Cuentas ---
 
 async function saveAdminAccounts() {
@@ -365,13 +534,16 @@ function calculateFullRatesInternal() {
     const fullRates = {};
     
     const wldToUsdt = liveRates.WLD_to_USDT;
-    const usdtToClp = liveRates.USDT_to_CLP; 
+    const usdtToClp = liveRates.USDT_to_CLP;
     const usdtToVes = liveRates.USDT_to_VES;
 
-    // --- 1. L贸gica WLD/CLP (Descuento 14%) ---
+    const discountWldClp = getMarginValue('discountWldClp');
+    const discountClpVes = getMarginValue('discountClpVes');
+    const marginUsdtClp = getMarginValue('marginUsdtClp');
+
     if (wldToUsdt !== null && usdtToClp !== null) {
         const baseWldToClp = wldToUsdt * usdtToClp;
-        const finalWldToClp = baseWldToClp * (1 - DISCOUNT_RATE_WLD_CLP);
+        const finalWldToClp = baseWldToClp * (1 - discountWldClp);
         fullRates['WLD_to_CLP'] = finalWldToClp;
         fullRates['CLP_to_WLD'] = 1 / finalWldToClp;
     } else {
@@ -379,15 +551,9 @@ function calculateFullRatesInternal() {
         fullRates['CLP_to_WLD'] = null;
     }
 
-    // --- 2. L贸gica CLP/VES (Descuento 8%) ---
     if (usdtToClp !== null && usdtToVes !== null) {
-        // L贸gica correcta para la tasa cruzada:
-        // Para convertir CLP a VES, primero compramos USDT con CLP, luego vendemos esos USDT por VES.
-        // Tasa de compra de USDT con CLP: usdtToClp (ej: 980 CLP por 1 USDT)
-        // Tasa de venta de USDT por VES: usdtToVes (ej: 39 VES por 1 USDT)
-        // La tasa base es (VES por USDT) / (CLP por USDT) = VES por CLP
         const baseClpToVesRate = usdtToVes / usdtToClp;
-        const finalClpToVesRate = baseClpToVesRate * (1 - DISCOUNT_RATE_CLP_VES); // Aplicar descuento del 6%
+        const finalClpToVesRate = baseClpToVesRate * (1 - discountClpVes);
         fullRates['CLP_to_VES'] = finalClpToVesRate;
         fullRates['VES_to_CLP'] = 1 / finalClpToVesRate;
     } else {
@@ -395,21 +561,20 @@ function calculateFullRatesInternal() {
         fullRates['VES_to_CLP'] = null;
     }
     
-    // --- 3. L贸gica CLP/USDT y USDT/CLP (Margen 0.4%) ---
     if (usdtToClp !== null) {
-        const finalUsdtToClp = usdtToClp * (1 + MARGIN_RATE_USDT_CLP);
+        const finalUsdtToClp = usdtToClp * (1 + marginUsdtClp);
         const finalClpToUsdt = 1 / finalUsdtToClp;
         fullRates['CLP_to_USDT'] = finalClpToUsdt;
         fullRates['USDT_to_CLP'] = finalUsdtToClp;
         if (usdtClpMarginDisplay) {
-             usdtClpMarginDisplay.textContent = `1 USDT = ${finalUsdtToClp.toFixed(2)} CLP`;
+            const percentText = formatPercent(marginUsdtClp);
+            usdtClpMarginDisplay.textContent = `1 USDT = ${finalUsdtToClp.toFixed(2)} CLP (Margen +${percentText}%)`;
         }
     } else {
         fullRates['CLP_to_USDT'] = null;
         fullRates['USDT_to_CLP'] = null;
     }
     
-    // --- 4. L贸gica USDT/VES y VES/USDT (Sin Margen Adicional) ---
     if (usdtToVes !== null) {
         fullRates['USDT_to_VES'] = usdtToVes;
         fullRates['VES_to_USDT'] = 1 / usdtToVes;
@@ -433,19 +598,19 @@ function calculateExchange(enablePaymentButton = true) {
     const currencySend = currencySendSelect.value;
     const currencyReceive = currencyReceiveSelect.value;
     const rates = calculateFullRatesInternal();
-    
-    const isReady = (rates.CLP_to_VES !== null || rates.VES_to_CLP !== null) && 
+
+    const isReady = (rates.CLP_to_VES !== null || rates.VES_to_CLP !== null) &&
                     (rates.USDT_to_CLP !== null || rates.CLP_to_USDT !== null);
 
     if (!isReady) {
-        rateDisplay.textContent = "Cargando tasas de cambio din谩micas...";
+        rateDisplay.textContent = "Cargando tasas de cambio din?micas...";
         paymentButton.disabled = true;
         return;
     }
 
     if (isNaN(amountSend) || amountSend <= 0) {
         amountReceiveDisplay.textContent = formatCurrency(0, currencyReceive);
-        rateDisplay.textContent = "Ingrese un monto v谩lido.";
+        rateDisplay.textContent = "Ingrese un monto v?lido.";
         paymentButton.disabled = true;
         errorMessage.classList.add('hidden');
         return;
@@ -454,33 +619,35 @@ function calculateExchange(enablePaymentButton = true) {
     const rateKey = `${currencySend}_to_${currencyReceive}`;
     const rate = rates[rateKey];
 
-
     if (rate === null || typeof rate === 'undefined') {
         amountReceiveDisplay.textContent = "N/A";
         rateDisplay.textContent = `Intercambio ${currencySend} a ${currencyReceive} no disponible.`;
         paymentButton.disabled = true;
         errorMessage.classList.remove('hidden');
-        errorMessage.textContent = `Error: El intercambio de ${currencySend} a ${currencyReceive} no es una ruta de remesa v谩lida.`;
+        errorMessage.textContent = `Error: El intercambio de ${currencySend} a ${currencyReceive} no es una ruta de remesa v?lida.`;
         return;
     }
 
-    // Habilitar el bot贸n solo si se pasa el par谩metro y hay un monto v谩lido
     if (enablePaymentButton && !isNaN(amountSend) && amountSend > 0) {
         paymentButton.disabled = false;
     }
     errorMessage.classList.add('hidden');
+
     const amountReceive = amountSend * rate;
     const rateFixed = rate.toFixed(currencyReceive === 'WLD' ? 8 : currencyReceive === 'CLP' ? 2 : 4);
+    const discountClpVesPercent = formatPercent(getMarginValue('discountClpVes'));
+    const discountWldClpPercent = formatPercent(getMarginValue('discountWldClp'));
+    const marginUsdtClpPercent = formatPercent(getMarginValue('marginUsdtClp'));
     let rateText;
-    
+
     if (currencySend === currencyReceive) {
         rateText = "Intercambio 1:1";
     } else if (currencySend === 'CLP' && currencyReceive === 'VES') {
-        rateText = `Tasa de Intercambio CLP/VES (Desc. 6%): 1 CLP = ${rateFixed} VES`;
+        rateText = `Tasa de Intercambio CLP/VES (Desc. ${discountClpVesPercent}%): 1 CLP = ${rateFixed} VES`;
     } else if (currencySend === 'WLD' && currencyReceive === 'CLP') {
-        rateText = `Tasa de Intercambio WLD/CLP (Desc. 14%): 1 WLD = ${rateFixed} CLP`;
+        rateText = `Tasa de Intercambio WLD/CLP (Desc. ${discountWldClpPercent}%): 1 WLD = ${rateFixed} CLP`;
     } else if (currencySend === 'USDT' && currencyReceive === 'CLP') {
-        rateText = `Tasa de Intercambio USDT/CLP (Margen +0.4%): 1 USDT = ${rateFixed} CLP`;
+        rateText = `Tasa de Intercambio USDT/CLP (Margen +${marginUsdtClpPercent}%): 1 USDT = ${rateFixed} CLP`;
     } else {
         rateText = `Tasa de Cambio: 1 ${currencySend} = ${rateFixed} ${currencyReceive}`;
     }
@@ -648,6 +815,9 @@ window.onload = function () {
     });
     
     saveAccountsButton.addEventListener('click', saveAdminAccounts);
+    if (saveMarginsButton) {
+        saveMarginsButton.addEventListener('click', saveMarginConfig);
+    }
     
     paymentButton.addEventListener('click', showPaymentModal);
     closeModalButton.addEventListener('click', () => {
@@ -663,3 +833,14 @@ window.onload = function () {
         }
     });
 };
+
+
+
+
+
+
+
+
+
+
+

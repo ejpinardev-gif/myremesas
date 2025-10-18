@@ -105,22 +105,48 @@
                 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div class="p-3 bg-yellow-100 rounded-lg">
-                        <h4 class="font-bold text-sm text-yellow-900 mb-1">WLD/CLP (Desc. 14%)</h4>
+                        <h4 class="font-bold text-sm text-yellow-900 mb-1">WLD/CLP (Desc. <span id="margin-wld-clp-label">14</span>%)</h4>
                         <p id="wld-usdt-display" class="text-xs text-gray-600">WLD/USDT (CoinGecko): Cargando...</p>
                         <p id="usdt-clp-p2p-wld-display" class="text-xs text-gray-600">USDT/CLP (Referencia): Cargando...</p>
                     </div>
 
                     <div class="p-3 bg-yellow-100 rounded-lg">
-                        <h4 class="font-bold text-sm text-yellow-900 mb-1">CLP/VES (Desc. 8%)</h4>
+                        <h4 class="font-bold text-sm text-yellow-900 mb-1">CLP/VES (Desc. <span id="margin-clp-ves-label">6</span>%)</h4>
                         <p id="clp-usdt-p2p-display" class="text-xs text-gray-600">USDT/CLP (CoinGecko): Cargando...</p>
                         <p id="ves-usdt-p2p-display" class="text-xs text-gray-600">USDT/VES (CoinGecko): Cargando...</p>
                     </div>
 
                     <div class="p-3 bg-yellow-100 rounded-lg">
-                        <h4 class="font-bold text-sm text-yellow-900 mb-1">USDT/CLP (Margen +0.4%)</h4>
+                        <h4 class="font-bold text-sm text-yellow-900 mb-1">USDT/CLP (Margen +<span id="margin-usdt-clp-label">0.4</span>%)</h4>
                         <p id="usdt-clp-margin-display" class="text-xs text-gray-600">USDT/CLP Tasa: Calculando...</p>
                     </div>
                 </div>
+            </section>
+            
+            <!-- SECCIÓN 1B: CONFIGURACIÓN DE MÁRGENES -->
+            <section class="mb-6 border-b border-yellow-200 pb-4">
+                <h3 class="text-lg font-bold text-yellow-900 mb-3">Configuración de Márgenes</h3>
+                <p class="text-sm text-yellow-700 mb-4">Ajusta descuentos y márgenes en porcentaje. Los cambios se aplican inmediatamente en la calculadora.</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                        <label for="margin-wld-clp" class="block text-xs font-semibold text-yellow-800 mb-1">Descuento WLD → CLP (%)</label>
+                        <input type="number" id="margin-wld-clp" min="0" max="100" step="0.1" class="w-full p-2 border border-yellow-300 rounded-lg text-sm bg-white" placeholder="Ej: 14">
+                    </div>
+                    <div>
+                        <label for="margin-clp-ves" class="block text-xs font-semibold text-yellow-800 mb-1">Descuento CLP → VES (%)</label>
+                        <input type="number" id="margin-clp-ves" min="0" max="100" step="0.1" class="w-full p-2 border border-yellow-300 rounded-lg text-sm bg-white" placeholder="Ej: 6">
+                    </div>
+                    <div>
+                        <label for="margin-usdt-clp" class="block text-xs font-semibold text-yellow-800 mb-1">Margen USDT → CLP (%)</label>
+                        <input type="number" id="margin-usdt-clp" min="0" max="100" step="0.1" class="w-full p-2 border border-yellow-300 rounded-lg text-sm bg-white" placeholder="Ej: 0.4">
+                    </div>
+                </div>
+
+                <button id="save-margins-button" class="mt-4 w-full py-2 bg-yellow-600 text-white font-semibold rounded-lg hover:bg-yellow-700 transition duration-300">
+                    Guardar Márgenes
+                </button>
+                <p id="margin-status" class="text-sm text-center mt-2 text-yellow-800 font-medium hidden">Márgenes guardados correctamente.</p>
             </section>
             
             <!-- SECCIÓN 2: GESTIÓN DE CUENTAS BANCARIAS DEL ADMINISTRADOR -->

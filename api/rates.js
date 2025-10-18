@@ -10,7 +10,9 @@ const FALLBACK_RATES = {
 };
 
 const BINANCE_P2P_ENDPOINT = 'https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search';
-const BINANCE_SPOT_ENDPOINT = 'https://api.binance.com/api/v3/ticker/price';
+const BINANCE_TICKER_PRICE_ENDPOINT = 'https://api.binance.com/api/v3/ticker/price';
+const BINANCE_AVG_PRICE_ENDPOINT = 'https://api.binance.com/api/v3/avgPrice';
+const BINANCE_24H_TICKER_ENDPOINT = 'https://api.binance.com/api/v3/ticker/24hr';
 
 /**
  * Genera headers comunes para las peticiones a Binance.
@@ -29,20 +31,46 @@ function buildHeaders(extra = {}) {
  * Obtiene el precio spot de WLD/USDT usando la API oficial.
  */
 async function getSpotRate() {
-    try {
-        const { data } = await axios.get(BINANCE_SPOT_ENDPOINT, {
+    const attempts = [
+        {
+            url: BINANCE_AVG_PRICE_ENDPOINT,
             params: { symbol: 'WLDUSDT' },
-            headers: buildHeaders(),
-            timeout: 5000,
-        });
-        if (!data || typeof data.price === 'undefined') {
-            throw new Error('Respuesta sin precio');
+            source: 'avgPrice',
+            pick: (data) => data?.price,
+        },
+        {
+            url: BINANCE_TICKER_PRICE_ENDPOINT,
+            params: { symbol: 'WLDUSDT' },
+            source: 'tickerPrice',
+            pick: (data) => data?.price,
+        },
+        {
+            url: BINANCE_24H_TICKER_ENDPOINT,
+            params: { symbol: 'WLDUSDT' },
+            source: 'ticker24h',
+            pick: (data) => data?.lastPrice,
+        },
+    ];
+
+    for (const attempt of attempts) {
+        try {
+            const { data } = await axios.get(attempt.url, {
+                params: attempt.params,
+                headers: buildHeaders(),
+                timeout: 5000,
+            });
+            const rawPrice = attempt.pick(data);
+            const price = parseFloat(rawPrice);
+            if (Number.isFinite(price) && price > 0) {
+                return { price, source: attempt.source };
+            }
+        } catch (error) {
+            console.warn(`Fallo consulta spot (${attempt.source}):`, error.message);
         }
-        return parseFloat(data.price);
-    } catch (error) {
-        console.error('Error al obtener WLD/USDT spot rate:', error.message);
-        return null;
     }
+
+    console.error('No se pudo obtener precio spot WLD/USDT desde Binance.');
+    return null;
 }
 
 /**
@@ -128,12 +156,14 @@ module.exports = async (req, res) => {
     }
 
     try {
-        const [spotPrice, clpBuyPrices, vesSellPrices] = await Promise.all([
+        const [spotResult, clpBuyPrices, vesSellPrices] = await Promise.all([
             getSpotRate(),
             getP2PRates({ fiat: 'CLP', tradeType: 'BUY' }),
             getP2PRates({ fiat: 'VES', tradeType: 'SELL' }),
         ]);
 
+        const spotPrice = spotResult?.price ?? null;
+        const spotSource = spotResult?.source ?? 'fallback';
         const clpBuyRate = pickOffer(clpBuyPrices, { average: 3 }) || FALLBACK_RATES.USDT_to_CLP_P2P;
         const vesSellRate = pickOffer(vesSellPrices, { index: 3 }) || FALLBACK_RATES.VES_per_USDT_SELL;
         const wldSpot = spotPrice || FALLBACK_RATES.WLD_to_USDT;
@@ -144,7 +174,7 @@ module.exports = async (req, res) => {
             USDT_to_CLP_P2P: clpBuyRate,
             VES_per_USDT_SELL: vesSellRate,
             meta: {
-                spotSource: spotPrice ? 'binance_spot' : 'fallback',
+                spotSource,
                 clpOffers: clpBuyPrices.length,
                 vesOffers: vesSellPrices.length,
                 apiKeyAttached: Boolean(BINANCE_API_KEY && BINANCE_API_SECRET),
