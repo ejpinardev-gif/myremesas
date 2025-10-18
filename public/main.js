@@ -1,11 +1,11 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+﻿import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, addDoc, onSnapshot, collection, query, serverTimestamp, setLogLevel, deleteDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-// Establecer nivel de log para depuración de Firestore
+// Establecer nivel de log para depuraciÃ³n de Firestore
 setLogLevel('Debug');
 
-// --- CONFIGURACIÓN DE SEGURIDAD ---
+// --- CONFIGURACIÃ“N DE SEGURIDAD ---
 // Lista de User IDs de administradores autorizados para ver el panel.
 // Se obtiene de las variables de entorno de Vercel para mayor seguridad y flexibilidad.
 const ADMIN_UIDS_PLACEHOLDER = "VERCEL_INJECTED_ADMIN_UIDS";
@@ -14,7 +14,7 @@ const ADMIN_UIDS = ADMIN_UIDS_PLACEHOLDER.split(',').filter(uid => uid.trim() !=
 // Variables Globales de Firebase (provistas por el entorno)
 const appId = "VERCEL_INJECTED_APP_ID";
 const firebaseConfig = "VERCEL_INJECTED_FIREBASE_CONFIG";
-const initialAuthToken = null; // No estamos usando este método por ahora.
+const initialAuthToken = null; // No estamos usando este mÃ©todo por ahora.
 
 let db;
 let auth;
@@ -33,16 +33,18 @@ let liveRates = {
 // Cuentas de destino del administrador
 let adminAccounts = []; 
 
-// Configuración de márgenes (se puede sobrescribir desde Firestore)
+// ConfiguraciÃ³n de mÃ¡rgenes (se puede sobrescribir desde Firestore)
 const DEFAULT_MARGIN_CONFIG = {
     discountWldClp: 0.14,
     discountClpVes: 0.06,
     marginUsdtClp: 0.004,
 };
+const MARGIN_CONFIG_COLLECTION = 'config';
+const MARGIN_CONFIG_DOC_ID = 'pricing';
 let marginConfig = { ...DEFAULT_MARGIN_CONFIG };
 let marginConfigUnsubscribe = null;
 
-// --- DECLARACIÓN DE VARIABLES DEL DOM (INICIALIZACIÓN MOVIDA A initializeDOM) ---
+// --- DECLARACIÃ“N DE VARIABLES DEL DOM (INICIALIZACIÃ“N MOVIDA A initializeDOM) ---
 let userIdDisplay, userIdContainer, authStatus, amountSendInput, currencySendSelect, currencyReceiveSelect, swapButton, amountReceiveDisplay, rateDisplay, paymentButton, errorMessage, historyContainer, loadingHistory, adminPanel, toggleAdminButton, rateFetchStatus, savedAccountsList, accountCount, wldUsdtDisplay, usdtClpP2pWldDisplay, clpUsdtP2pDisplay, vesUsdtP2pDisplay, usdtClpMarginDisplay, adminBankNameInput, adminAccountHolderInput, adminAccountNumberInput, adminRutInput, adminAccountTypeInput, adminEmailInput, saveAccountsButton, accountStatus, paymentModal, closeModalButton, modalAmountSend, modalAmountReceive, adminAccountDetailsContainer, noAccountsMessage, modalCryptoWarning, modalTransferCurrency, adminToggleContainer, marginWldClpInput, marginClpVesInput, marginUsdtClpInput, saveMarginsButton, marginStatus, marginWldClpLabel, marginClpVesLabel, marginUsdtClpLabel;
 
 /**
@@ -98,7 +100,7 @@ function initializeDOM() {
     marginClpVesLabel = document.getElementById('margin-clp-ves-label');
     marginUsdtClpLabel = document.getElementById('margin-usdt-clp-label');
 
-    // **CORRECCIÓN**: Evita que el botón de pago envíe el formulario por defecto.
+    // **CORRECCIÃ“N**: Evita que el botÃ³n de pago envÃ­e el formulario por defecto.
     if (paymentButton) paymentButton.type = 'button';
 
     applyMarginConfigToUI();
@@ -109,7 +111,7 @@ function initializeDOM() {
 async function initializeFirebase() {
     try {
         if (!firebaseConfig) {
-            authStatus.textContent = "Error: Configuración de Firebase no disponible.";
+            authStatus.textContent = "Error: ConfiguraciÃ³n de Firebase no disponible.";
             return;
         }
 
@@ -158,8 +160,8 @@ async function authenticateUser() {
              await signInAnonymously(auth);
          }
      } catch (error) {
-         console.error("Error de autenticación:", error);
-         authStatus.textContent = `Error de Autenticación: ${error.message}`;
+         console.error("Error de autenticaciÃ³n:", error);
+         authStatus.textContent = `Error de AutenticaciÃ³n: ${error.message}`;
      }
 }
 
@@ -180,7 +182,7 @@ function formatCurrency(value, currencyCode) {
 }
 
  /**
- * **NUEVA FUNCIÓN**: Copia texto al portapapeles y muestra feedback.
+ * **NUEVA FUNCIÃ“N**: Copia texto al portapapeles y muestra feedback.
  */
 function copyToClipboard(text, element) {
     // Usamos document.execCommand para mayor compatibilidad en iframes
@@ -280,7 +282,7 @@ function setupMarginConfigListener() {
         applyMarginConfigToUI();
         calculateExchange(false);
     }, (error) => {
-        console.error('Error al escuchar m�rgenes:', error);
+        console.error('Error al escuchar márgenes:', error);
     });
 }
 
@@ -291,7 +293,7 @@ function readPercentInput(inputElement, label, fallbackDecimal) {
 
     const numeric = parseFloat(raw);
     if (!Number.isFinite(numeric)) {
-        throw new Error(`Ingrese un valor num�rico v�lido para ${label}.`);
+        throw new Error(`Ingrese un valor numérico válido para ${label}.`);
     }
     if (numeric < 0 || numeric > 100) {
         throw new Error(`${label} debe estar entre 0% y 100%.`);
@@ -302,11 +304,11 @@ function readPercentInput(inputElement, label, fallbackDecimal) {
 async function saveMarginConfig(event) {
     if (event) event.preventDefault();
     if (!isAuthReady || !db) {
-        showMarginStatus('Error: conexi�n no lista.', true);
+        showMarginStatus('Error: conexión no lista.', true);
         return;
     }
     if (!ADMIN_UIDS.includes(userId)) {
-        showMarginStatus('No autorizado para actualizar m�rgenes.', true);
+        showMarginStatus('No autorizado para actualizar márgenes.', true);
         return;
     }
 
@@ -331,7 +333,7 @@ async function saveMarginConfig(event) {
     const configDocRef = doc(db, MARGIN_CONFIG_COLLECTION, MARGIN_CONFIG_DOC_ID);
 
     try {
-        showMarginStatus('Guardando m�rgenes...');
+        showMarginStatus('Guardando márgenes...');
         if (saveMarginsButton) {
             saveMarginsButton.disabled = true;
             saveMarginsButton.textContent = 'Guardando...';
@@ -347,23 +349,23 @@ async function saveMarginConfig(event) {
         marginConfig = { discountWldClp, discountClpVes, marginUsdtClp };
         applyMarginConfigToUI();
         calculateExchange(false);
-        showMarginStatus('M�rgenes guardados correctamente.');
+        showMarginStatus('Márgenes guardados correctamente.');
         setTimeout(() => hideMarginStatus(), 3000);
     } catch (error) {
-        console.error('Error al guardar m�rgenes:', error);
-        showMarginStatus(`Error al guardar m�rgenes: ${error.message}`, true);
+        console.error('Error al guardar márgenes:', error);
+        showMarginStatus(`Error al guardar márgenes: ${error.message}`, true);
     } finally {
         if (saveMarginsButton) {
             saveMarginsButton.disabled = false;
-            saveMarginsButton.textContent = 'Guardar M�rgenes';
+            saveMarginsButton.textContent = 'Guardar Márgenes';
         }
     }
 }
-// --- Lógica de Administración de Cuentas ---
+// --- LÃ³gica de AdministraciÃ³n de Cuentas ---
 
 async function saveAdminAccounts() {
     if (!isAuthReady || !db) {
-        accountStatus.textContent = "Error: Conexión no lista.";
+        accountStatus.textContent = "Error: ConexiÃ³n no lista.";
         return;
     }
 
@@ -375,7 +377,7 @@ async function saveAdminAccounts() {
     const email = adminEmailInput.value.trim();
 
     if (!bankName || !accountHolder || !accountNumber || !rut || !accountType) {
-        accountStatus.textContent = "Error: Complete todos los campos requeridos (Banco, Titular, Número, RUT, Tipo).";
+        accountStatus.textContent = "Error: Complete todos los campos requeridos (Banco, Titular, NÃºmero, RUT, Tipo).";
         return;
     }
     
@@ -396,13 +398,13 @@ async function saveAdminAccounts() {
         });
         
         adminBankNameInput.value = '';
-        adminAccountHolderInput.value = 'Ender Javier Piña Rojas';
+        adminAccountHolderInput.value = 'Ender Javier PiÃ±a Rojas';
         adminAccountNumberInput.value = '';
         adminRutInput.value = '26728535-7';
         adminAccountTypeInput.value = '';
         adminEmailInput.value = '';
 
-        accountStatus.textContent = "¡Cuenta guardada correctamente!";
+        accountStatus.textContent = "Â¡Cuenta guardada correctamente!";
     } catch (error) {
         console.error("Error al guardar cuentas:", error);
         accountStatus.textContent = "Error al guardar cuentas: " + error.message;
@@ -414,8 +416,8 @@ async function saveAdminAccounts() {
 
 async function deleteAdminAccount(docId, accountName) {
     if (!isAuthReady || !db) {
-        console.error("Error: Conexión a Firebase no lista.");
-        accountStatus.textContent = "Error: Conexión no lista.";
+        console.error("Error: ConexiÃ³n a Firebase no lista.");
+        accountStatus.textContent = "Error: ConexiÃ³n no lista.";
         return;
     }
     
@@ -467,7 +469,7 @@ function renderAdminAccountsList() {
         item.innerHTML = `
             <div>
                 <p class="font-bold text-gray-800">${account.bankName} (${account.accountType})</p>
-                <p class="text-gray-600">N° ${account.accountNumber} | RUT: ${account.rut}</p>
+                <p class="text-gray-600">NÂ° ${account.accountNumber} | RUT: ${account.rut}</p>
             </div>
             <button data-id="${account.id}" data-name="${account.bankName} (${account.accountType})" class="delete-account-btn text-red-500 hover:text-red-700 ml-2 p-1 rounded-full bg-red-100 transition duration-150">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -487,7 +489,7 @@ function renderAdminAccountsList() {
     });
 }
 
-// --- Lógica de Tasas Dinámicas ---
+// --- LÃ³gica de Tasas DinÃ¡micas ---
 
 async function fetchDynamicRates() {
     rateFetchStatus.textContent = 'Conectando con API de Vercel...';
@@ -500,7 +502,7 @@ async function fetchDynamicRates() {
         }
         const data = await response.json();
         
-        // Ajusta la lógica para usar la respuesta de tu API de Vercel
+        // Ajusta la lÃ³gica para usar la respuesta de tu API de Vercel
         if (data?.success) {
             liveRates.USDT_to_CLP = data.USDT_to_CLP_P2P;
             liveRates.USDT_to_VES = data.VES_per_USDT_SELL; // Usamos la nueva tasa de venta
@@ -515,20 +517,20 @@ async function fetchDynamicRates() {
             throw new Error("Respuesta de la API de Vercel con formato inesperado o error.");
         }
     } catch (error) {
-        console.warn("Fallo en la conexión con la API de Vercel. Usando tasas de referencia fijas.", error);
+        console.warn("Fallo en la conexiÃ³n con la API de Vercel. Usando tasas de referencia fijas.", error);
         wldUsdtDisplay.textContent = `WLD/USDT: ${liveRates.WLD_to_USDT.toFixed(4)} (Fijo)`;
         clpUsdtP2pDisplay.textContent = `USDT/CLP: 1 USDT = ${liveRates.USDT_to_CLP.toFixed(2)} CLP (Fijo)`;
         usdtClpP2pWldDisplay.textContent = `USDT/CLP: ${liveRates.USDT_to_CLP.toFixed(2)} CLP / USDT (Fijo)`;
         vesUsdtP2pDisplay.textContent = `USDT/VES: 1 USDT = ${liveRates.USDT_to_VES.toFixed(2)} VES (Fijo)`;
-        rateFetchStatus.textContent = 'Fallo de conexión. Usando tasas de Referencia Fijas.';
+        rateFetchStatus.textContent = 'Fallo de conexiÃ³n. Usando tasas de Referencia Fijas.';
     }
 
-    // **CORRECCIÓN**: Llama al cálculo inicial pero sin habilitar el botón de pago.
+    // **CORRECCIÃ“N**: Llama al cÃ¡lculo inicial pero sin habilitar el botÃ³n de pago.
     calculateExchange(false);
 }
 
 
-// --- Lógica de Intercambio (Cálculo) ---
+// --- LÃ³gica de Intercambio (CÃ¡lculo) ---
 
 function calculateFullRatesInternal() {
     const fullRates = {};
@@ -603,14 +605,14 @@ function calculateExchange(enablePaymentButton = true) {
                     (rates.USDT_to_CLP !== null || rates.CLP_to_USDT !== null);
 
     if (!isReady) {
-        rateDisplay.textContent = "Cargando tasas de cambio din?micas...";
+        rateDisplay.textContent = "Cargando tasas de cambio dinámicas...";
         paymentButton.disabled = true;
         return;
     }
 
     if (isNaN(amountSend) || amountSend <= 0) {
         amountReceiveDisplay.textContent = formatCurrency(0, currencyReceive);
-        rateDisplay.textContent = "Ingrese un monto v?lido.";
+        rateDisplay.textContent = "Ingrese un monto válido.";
         paymentButton.disabled = true;
         errorMessage.classList.add('hidden');
         return;
@@ -624,7 +626,7 @@ function calculateExchange(enablePaymentButton = true) {
         rateDisplay.textContent = `Intercambio ${currencySend} a ${currencyReceive} no disponible.`;
         paymentButton.disabled = true;
         errorMessage.classList.remove('hidden');
-        errorMessage.textContent = `Error: El intercambio de ${currencySend} a ${currencyReceive} no es una ruta de remesa v?lida.`;
+        errorMessage.textContent = `Error: El intercambio de ${currencySend} a ${currencyReceive} no es una ruta de remesa válida.`;
         return;
     }
 
@@ -663,11 +665,11 @@ function swapCurrencies() {
     calculateExchange();
 }
 
-// --- Lógica de Transacciones y Modal de Pago ---
+// --- LÃ³gica de Transacciones y Modal de Pago ---
 
 async function recordTransaction(amountSend, currencySend, amountReceive, currencyReceive) {
     if (!isAuthReady || !db) {
-        console.error("Error: Firebase o autenticación no lista para registrar.");
+        console.error("Error: Firebase o autenticaciÃ³n no lista para registrar.");
         return;
     }
     const transactionData = {
@@ -683,9 +685,9 @@ async function recordTransaction(amountSend, currencySend, amountReceive, curren
     try {
         const collectionPath = `artifacts/${appId}/users/${userId}/transactions`;
         await addDoc(collection(db, collectionPath), transactionData);
-        console.log("Transacción registrada con éxito.");
+        console.log("TransacciÃ³n registrada con Ã©xito.");
     } catch (error) {
-        console.error("Error al registrar transacción:", error);
+        console.error("Error al registrar transacciÃ³n:", error);
     }
 }
 
@@ -714,7 +716,7 @@ function setupTransactionListener() {
 function renderTransactionHistory(transactions) {
     historyContainer.innerHTML = '';
     if (transactions.length === 0) {
-        historyContainer.innerHTML = '<p class="text-gray-500 text-sm p-2">Aún no hay transacciones.</p>';
+        historyContainer.innerHTML = '<p class="text-gray-500 text-sm p-2">AÃºn no hay transacciones.</p>';
         return;
     }
 
@@ -725,7 +727,7 @@ function renderTransactionHistory(transactions) {
         const item = document.createElement('div');
         item.className = 'p-3 bg-gray-50 rounded-lg border border-gray-200 text-sm';
         item.innerHTML = `
-            <p class="font-bold text-gray-800">${formatCurrency(tx.amountSend, tx.currencySend)} → ${formatCurrency(tx.amountReceive, tx.currencyReceive)}</p>
+            <p class="font-bold text-gray-800">${formatCurrency(tx.amountSend, tx.currencySend)} â†’ ${formatCurrency(tx.amountReceive, tx.currencyReceive)}</p>
             <p class="text-xs text-gray-500 mt-1">
                 Tasa: ${tx.rateApplied ? tx.rateApplied.toFixed(tx.currencySend === 'CLP' ? 8 : 4) : 'N/A'}
                 | Fecha: ${date} ${time}
@@ -757,16 +759,16 @@ function showPaymentModal() {
             clpAccounts.forEach(account => {
                 const accountDiv = document.createElement('div');
                 accountDiv.className = 'p-3 bg-white border border-cyan-300 rounded-lg shadow-sm';
-                // **MEJORA UX**: Se agrega un botón para copiar el número de cuenta
+                // **MEJORA UX**: Se agrega un botÃ³n para copiar el nÃºmero de cuenta
                 accountDiv.innerHTML = `
                     <p class="font-bold text-cyan-700">${account.bankName} (${account.accountType})</p>
                     <p class="text-sm text-gray-700">Titular: ${account.accountHolder}</p>
                     <p class="text-sm text-gray-700">RUT: ${account.rut}</p>
                     <div class="flex justify-between items-center mt-1 relative">
-                        <p class="text-sm text-gray-700">N° Cuenta: <span class="font-mono">${account.accountNumber}</span></p>
+                        <p class="text-sm text-gray-700">NÂ° Cuenta: <span class="font-mono">${account.accountNumber}</span></p>
                         <button class="copy-btn p-1 rounded hover:bg-teal-100" data-copy="${account.accountNumber}">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                            <span class="copy-feedback">¡Copiado!</span>
+                            <span class="copy-feedback">Â¡Copiado!</span>
                         </button>
                     </div>
                     ${account.email && account.email !== 'N/A' ? `<p class="text-sm text-gray-700 mt-1">Email: ${account.email}</p>` : ''}
@@ -780,10 +782,10 @@ function showPaymentModal() {
     } else if (currencySend === 'WLD' || currencySend === 'USDT') {
         modalCryptoWarning.classList.remove('hidden');
         modalTransferCurrency.textContent = currencySend;
-        adminAccountDetailsContainer.innerHTML = '<p class="text-center text-gray-600 p-4">La dirección de la Wallet será proporcionada por el administrador una vez que confirme su intención de enviar criptomonedas.</p>';
+        adminAccountDetailsContainer.innerHTML = '<p class="text-center text-gray-600 p-4">La direcciÃ³n de la Wallet serÃ¡ proporcionada por el administrador una vez que confirme su intenciÃ³n de enviar criptomonedas.</p>';
     } else {
         modalCryptoWarning.classList.remove('hidden');
-        modalCryptoWarning.textContent = `Aviso: El método de transferencia para ${currencySend} debe ser coordinado con el administrador.`;
+        modalCryptoWarning.textContent = `Aviso: El mÃ©todo de transferencia para ${currencySend} debe ser coordinado con el administrador.`;
         adminAccountDetailsContainer.innerHTML = '';
     }
     
@@ -794,7 +796,7 @@ function showPaymentModal() {
     paymentModal.classList.remove('hidden');
 }
 
-// --- Inicialización y Listeners ---
+// --- InicializaciÃ³n y Listeners ---
 
 window.onload = function () {
     initializeDOM();
@@ -811,7 +813,7 @@ window.onload = function () {
 
     toggleAdminButton.addEventListener('click', () => {
         adminPanel.classList.toggle('hidden');
-        toggleAdminButton.textContent = adminPanel.classList.contains('hidden') ? 'Mostrar Panel de Administración' : 'Ocultar Panel de Administración';
+        toggleAdminButton.textContent = adminPanel.classList.contains('hidden') ? 'Mostrar Panel de AdministraciÃ³n' : 'Ocultar Panel de AdministraciÃ³n';
     });
     
     saveAccountsButton.addEventListener('click', saveAdminAccounts);
@@ -824,7 +826,7 @@ window.onload = function () {
         paymentModal.classList.add('hidden');
     });
 
-    // **NUEVO LISTENER**: Delegación de eventos para los botones de copiado
+    // **NUEVO LISTENER**: DelegaciÃ³n de eventos para los botones de copiado
     adminAccountDetailsContainer.addEventListener('click', function(event) {
         const button = event.target.closest('.copy-btn');
         if (button) {
@@ -833,6 +835,8 @@ window.onload = function () {
         }
     });
 };
+
+
 
 
 
