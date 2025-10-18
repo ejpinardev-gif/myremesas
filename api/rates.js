@@ -4,11 +4,7 @@ const Binance = require('node-binance-api');
 const binance = new Binance().options({
   APIKEY: process.env.BINANCE_API_KEY,
   APISECRET: process.env.BINANCE_API_SECRET,
-  // Opcional: para logs de depuración
-  verbose: true, 
-  log: log => {
-    console.log(log); 
-  }
+  useServerTime: true // Asegura que las solicitudes estén sincronizadas con el tiempo del servidor de Binance
 });
 
 // Tasas de Referencia Fijas (Fallback en caso de que todo falle)
