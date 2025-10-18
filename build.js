@@ -3,15 +3,66 @@ const path = require('path');
 
 console.log('Starting build script...');
 
-// Obtener las variables de entorno de Vercel
-const firebaseConfig = process.env.__FIREBASE_CONFIG;
-const appId = process.env.__APP_ID;
-const adminUids = process.env.ADMIN_UIDS;
+// Utilidades ---------------------------------------------------------------
+const LOCAL_CONFIG_FILENAME = 'local.firebase.config.json';
 
-// Validar que las variables de entorno existan
+function normalizeFirebaseConfig(value) {
+  if (!value) return null;
+  // Si ya viene como string (Vercel env), lo devolvemos tal cual.
+  if (typeof value === 'string') return value;
+  // Si es objeto (archivo local), lo serializamos.
+  try {
+    return JSON.stringify(value);
+  } catch (err) {
+    console.warn('Could not stringify firebaseConfig value:', err);
+    return null;
+  }
+}
+
+function normalizeAdminUids(value) {
+  if (!value) return null;
+  if (Array.isArray(value)) {
+    return value.join(',');
+  }
+  return String(value);
+}
+
+function loadLocalConfig() {
+  const candidatePath = path.join(__dirname, LOCAL_CONFIG_FILENAME);
+  if (!fs.existsSync(candidatePath)) {
+    return null;
+  }
+
+  try {
+    const raw = fs.readFileSync(candidatePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    console.log(`Loaded local Firebase config from ${LOCAL_CONFIG_FILENAME}.`);
+    return parsed;
+  } catch (error) {
+    console.warn(`Failed to read ${LOCAL_CONFIG_FILENAME}:`, error);
+    return null;
+  }
+}
+
+// Obtener las variables de entorno (modo despliegue)
+let firebaseConfig = normalizeFirebaseConfig(process.env.__FIREBASE_CONFIG);
+let appId = process.env.__APP_ID;
+let adminUids = normalizeAdminUids(process.env.ADMIN_UIDS);
+
+// Intentar fallback a archivo local si faltan datos (modo desarrollo)
 if (!firebaseConfig || !appId || !adminUids) {
-  console.error('Error: Missing required environment variables (__FIREBASE_CONFIG, __APP_ID, ADMIN_UIDS).');
-  process.exit(1); // Salir con error
+  const localConfig = loadLocalConfig();
+  if (localConfig) {
+    firebaseConfig = firebaseConfig || normalizeFirebaseConfig(localConfig.firebaseConfig);
+    appId = appId || localConfig.appId;
+    adminUids = adminUids || normalizeAdminUids(localConfig.adminUids);
+  }
+}
+
+// Validar que las variables existan tras los intentos
+if (!firebaseConfig || !appId || !adminUids) {
+  console.error('Error: Missing Firebase configuration. Provide environment variables (__FIREBASE_CONFIG, __APP_ID, ADMIN_UIDS) or create local.firebase.config.json.');
+  process.exit(1);
 }
 
 const mainJsPath = path.join(__dirname, 'public', 'main.js');

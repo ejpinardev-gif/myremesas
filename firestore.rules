@@ -1,39 +1,29 @@
-rules_version = '2';
+rules_version = "2";
 
-// Reglas de seguridad para las colecciones usadas en la aplicación de remesas.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // =================================================================
-    // 1. Colección de Datos Públicos del Administrador (Cuentas)
-    // Ruta: /artifacts/{appId}/public/data/admin_accounts/{accountId}
-    // Permite la LECTURA a cualquier usuario autenticado.
-    // Permite la ESCRITURA solo si el usuario que escribe es el creador de la app (Admin).
-    // NOTA: Para producción real, el userId del admin debe ser hardcodeado aquí.
-    // Aquí asumimos que el primer usuario que escribe es el administrador.
-    // =================================================================
-
-    match /artifacts/{appId}/public/data/admin_accounts/{accountId} {
-      // Lectura permitida a cualquier usuario autenticado (incluyendo anónimo)
-      allow read: if request.auth != null; 
-
-      // Escritura, creación y eliminación permitida solo si el usuario autenticado es el mismo
-      // que está editando (en el entorno Canvas, el único usuario que puede editar el código
-      // es también el único que puede autenticarse de forma persistente).
-      // En un entorno de producción, cambiarías request.auth.uid por tu ID de usuario fijo.
-      allow create, update, delete: if request.auth != null; 
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // =================================================================
-    // 2. Colección de Transacciones Privadas (Historial del Usuario)
-    // Ruta: /artifacts/{appId}/users/{userId}/transactions/{transactionId}
-    // Permite la LECTURA y ESCRITURA solo si el userId en la ruta coincide
-    // con el ID del usuario que hace la solicitud.
-    // =================================================================
+    function isAdmin() {
+      return isSignedIn() && request.auth.uid in [
+        "71YiNOk9MOc6mNjxnnKBLST1Clh2"
+      ];
+    }
+
+    match /artifacts/{appId}/public/data/admin_accounts/{accountId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
 
     match /artifacts/{appId}/users/{userId}/transactions/{transactionId} {
-      allow read, create, update, delete: if request.auth != null 
-                                       && request.auth.uid == userId;
+      allow read, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /config/pricing {
+      allow read, write: if isAdmin();
     }
   }
 }

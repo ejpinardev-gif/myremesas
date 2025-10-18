@@ -13,6 +13,7 @@ const BINANCE_P2P_ENDPOINT = 'https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/a
 const BINANCE_TICKER_PRICE_ENDPOINT = 'https://api.binance.com/api/v3/ticker/price';
 const BINANCE_AVG_PRICE_ENDPOINT = 'https://api.binance.com/api/v3/avgPrice';
 const BINANCE_24H_TICKER_ENDPOINT = 'https://api.binance.com/api/v3/ticker/24hr';
+const BYBIT_SPOT_TICKER_ENDPOINT = 'https://api.bybit.com/v5/market/tickers';
 
 /**
  * Genera headers comunes para las peticiones a Binance.
@@ -30,24 +31,24 @@ function buildHeaders(extra = {}) {
 /**
  * Obtiene el precio spot de WLD/USDT usando la API oficial.
  */
-async function getSpotRate() {
+async function getBinanceSpotRate() {
     const attempts = [
         {
             url: BINANCE_AVG_PRICE_ENDPOINT,
             params: { symbol: 'WLDUSDT' },
-            source: 'avgPrice',
+            source: 'binance_avgPrice',
             pick: (data) => data?.price,
         },
         {
             url: BINANCE_TICKER_PRICE_ENDPOINT,
             params: { symbol: 'WLDUSDT' },
-            source: 'tickerPrice',
+            source: 'binance_tickerPrice',
             pick: (data) => data?.price,
         },
         {
             url: BINANCE_24H_TICKER_ENDPOINT,
             params: { symbol: 'WLDUSDT' },
-            source: 'ticker24h',
+            source: 'binance_ticker24h',
             pick: (data) => data?.lastPrice,
         },
     ];
@@ -69,7 +70,40 @@ async function getSpotRate() {
         }
     }
 
-    console.error('No se pudo obtener precio spot WLD/USDT desde Binance.');
+    return null;
+}
+
+async function getBybitSpotRate() {
+    try {
+        const { data } = await axios.get(BYBIT_SPOT_TICKER_ENDPOINT, {
+            params: {
+                category: 'spot',
+                symbol: 'WLDUSDT',
+            },
+            timeout: 5000,
+        });
+
+        const priceStr = data?.result?.list?.[0]?.lastPrice;
+        const price = parseFloat(priceStr);
+        if (Number.isFinite(price) && price > 0) {
+            return { price, source: 'bybit_spot' };
+        }
+        console.warn('Respuesta de Bybit sin precio válido para WLD/USDT.');
+        return null;
+    } catch (error) {
+        console.warn('Fallo consulta spot (bybit_spot):', error.message);
+        return null;
+    }
+}
+
+async function getSpotRate() {
+    const binanceSpot = await getBinanceSpotRate();
+    if (binanceSpot) return binanceSpot;
+
+    const bybitSpot = await getBybitSpotRate();
+    if (bybitSpot) return bybitSpot;
+
+    console.error('No se pudo obtener precio spot WLD/USDT desde Binance ni Bybit.');
     return null;
 }
 

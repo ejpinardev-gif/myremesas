@@ -285,7 +285,13 @@ function setupMarginConfigListener() {
         applyMarginConfigToUI();
         calculateExchange(false);
     }, (error) => {
-        console.error('Error al escuchar márgenes:', error);
+        console.error('Error al escuchar m?rgenes:', error);
+        if (error?.code === 'permission-denied') {
+            console.warn('El usuario no tiene permisos para leer config/pricing. Se usar?n m?rgenes por defecto.');
+            marginConfig = { ...DEFAULT_MARGIN_CONFIG };
+            applyMarginConfigToUI();
+            calculateExchange(false);
+        }
     });
 }
 

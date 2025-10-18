@@ -1,5 +1,7 @@
 {
   "projects": {
     "default": "studio-7601782447-44d81"
-  }
+  },
+  "targets": {},
+  "etags": {}
 }
