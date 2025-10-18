@@ -1,123 +1,161 @@
-const Binance = require('node-binance-api');
+const axios = require('axios');
 
-// Inicializa el cliente de Binance con las claves de API desde las variables de entorno
-const binance = new Binance().options({
-  APIKEY: process.env.BINANCE_API_KEY,
-  APISECRET: process.env.BINANCE_API_SECRET,
-  useServerTime: true // Asegura que las solicitudes estén sincronizadas con el tiempo del servidor de Binance
-});
+const BINANCE_API_KEY = process.env.BINANCE_API_KEY || '';
+const BINANCE_API_SECRET = process.env.BINANCE_API_SECRET || '';
 
-// Tasas de Referencia Fijas (Fallback en caso de que todo falle)
 const FALLBACK_RATES = {
-  WLD_to_USDT: 2.80,
-  USDT_to_CLP_P2P: 950.00,
-  VES_to_USDT_P2P: 37.00,
+    WLD_to_USDT: 2.80,
+    USDT_to_CLP_P2P: 950.00,
+    VES_per_USDT_SELL: 37.00,
 };
 
+const BINANCE_P2P_ENDPOINT = 'https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search';
+const BINANCE_SPOT_ENDPOINT = 'https://api.binance.com/api/v3/ticker/price';
+
 /**
- * Obtiene la tasa P2P de COMPRA de Binance para una moneda fiduciaria.
- * Este es un método no oficial, ya que la API P2P no es pública.
- * Mantenemos una lógica similar pero usando la librería.
- * @param {string} fiat - Código de moneda fiduciaria (CLP o VES).
- * @returns {Promise<number|null>} La tasa P2P o null si falla.
+ * Genera headers comunes para las peticiones a Binance.
+ * Para las peticiones Spot anexamos la API Key; la API P2P ignora la firma,
+ * pero mantener el header ayuda a depurar accesos.
  */
-async function getP2PBuyRate(fiat) {
-  try {
-    // La librería `node-binance-api` tiene un método interno para esto.
-    // Es más robusto que nuestra llamada manual con axios.
-    const response = await binance.p2p.buy("USDT", fiat, 1);
-
-    if (response && response.data && response.data.length > 0) {
-      const rate = parseFloat(response.data[0].adv.price);
-      return rate;
+function buildHeaders(extra = {}) {
+    const headers = { ...extra };
+    if (BINANCE_API_KEY) {
+        headers['X-MBX-APIKEY'] = BINANCE_API_KEY;
     }
-
-    console.warn(`No se encontraron ofertas P2P de COMPRA para ${fiat}.`);
-    return null;
-  } catch (error) {
-    console.error(`Error al obtener tasa P2P de COMPRA para ${fiat}:`, error.body || error.message);
-    return null;
-  }
+    return headers;
 }
 
 /**
- * Obtiene la tasa P2P de VENTA de Binance para una moneda fiduciaria.
- * @param {string} fiat - Código de moneda fiduciaria (VES).
- * @returns {Promise<number|null>} La tasa P2P o null si falla.
- */
-async function getP2PSellRate(fiat) {
-  try {
-    const response = await binance.p2p.sell("USDT", fiat, 4); // Pedimos 4 ofertas
-    // Para obtener la 4ta oferta, necesitamos asegurarnos de que la API devolvió al menos 4.
-    // El índice para el cuarto elemento es 3.
-    if (response && response.data && response.data.length >= 4) {
-      // Accedemos al cuarto elemento de la lista (índice 3)
-      const fourthOffer = response.data[3];
-      const rate = parseFloat(fourthOffer.adv.price);
-      return rate;
-    }
-
-    console.warn(`No se encontraron ofertas P2P para ${fiat}.`);
-    return null;
-  } catch (error) {
-    console.error(`Error al obtener tasa P2P de VENTA para ${fiat}:`, error.body || error.message);
-    return null;
-  }
-}
-
-/**
- * Obtiene el precio de WLD/USDT desde la API Spot oficial de Binance.
- * @returns {Promise<number|null>} El precio WLD/USDT o null si falla.
+ * Obtiene el precio spot de WLD/USDT usando la API oficial.
  */
 async function getSpotRate() {
-  try {
-    // Usamos el método de la librería para obtener el precio
-    const prices = await binance.prices('WLDUSDT');
-    if (prices && prices.WLDUSDT) {
-      return parseFloat(prices.WLDUSDT);
+    try {
+        const { data } = await axios.get(BINANCE_SPOT_ENDPOINT, {
+            params: { symbol: 'WLDUSDT' },
+            headers: buildHeaders(),
+            timeout: 5000,
+        });
+        if (!data || typeof data.price === 'undefined') {
+            throw new Error('Respuesta sin precio');
+        }
+        return parseFloat(data.price);
+    } catch (error) {
+        console.error('Error al obtener WLD/USDT spot rate:', error.message);
+        return null;
     }
-    console.warn("La respuesta de la API Spot no contenía un precio.");
-    return null;
-  } catch (error) {
-    console.error("Error al obtener WLD/USDT spot rate:", error.body || error.message);
-    return null;
-  }
 }
 
-// Función principal de Vercel Serverless
+/**
+ * Realiza una consulta al marketplace P2P de Binance.
+ * Binance no expone esta API con firma, por lo que se usa el endpoint público.
+ */
+async function getP2PRates({ fiat, tradeType, asset = 'USDT', rows = 8, transAmount = null }) {
+    const payload = {
+        page: 1,
+        rows,
+        payTypes: [],
+        asset,
+        tradeType,
+        fiat,
+        transAmount,
+        publisherType: null,
+        merchantCheck: false,
+        proMerchantAds: false,
+        shieldMerchantAds: false,
+    };
+
+    try {
+        const { data } = await axios.post(
+            BINANCE_P2P_ENDPOINT,
+            payload,
+            {
+                headers: {
+                    ...buildHeaders({
+                        'Content-Type': 'application/json',
+                        'clienttype': 'web',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
+                        'Origin': 'https://p2p.binance.com',
+                        'Referer': 'https://p2p.binance.com/',
+                    }),
+                },
+                timeout: 7000,
+            },
+        );
+
+        if (!data || !Array.isArray(data.data) || data.data.length === 0) {
+            console.warn(`No se recibieron ofertas P2P para ${tradeType} ${asset} ${fiat}`);
+            return [];
+        }
+
+        return data.data
+            .map((entry) => {
+                const price = parseFloat(entry?.adv?.price);
+                return Number.isFinite(price) ? price : null;
+            })
+            .filter((price) => price !== null);
+    } catch (error) {
+        console.error(`Error al obtener tasas P2P ${tradeType} ${asset}/${fiat}:`, error.message);
+        return [];
+    }
+}
+
+/**
+ * Selecciona una oferta concreta priorizando estabilidad frente a outliers.
+ */
+function pickOffer(prices, strategy = { index: 0, average: 0 }) {
+    if (!Array.isArray(prices) || prices.length === 0) {
+        return null;
+    }
+
+    if (strategy.average && prices.length >= strategy.average) {
+        const slice = prices.slice(0, strategy.average);
+        const sum = slice.reduce((acc, price) => acc + price, 0);
+        return sum / slice.length;
+    }
+
+    const index = Math.min(strategy.index ?? 0, prices.length - 1);
+    return prices[index];
+}
+
 module.exports = async (req, res) => {
-  // Configurar headers CORS
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Content-Type", "application/json");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
 
-  try {
-    // Llamadas concurrentes para obtener todas las tasas
-    const [spotPrice, clpBuyRate, vesSellRate] = await Promise.all([
-      getSpotRate(),
-      getP2PBuyRate("CLP"),
-      getP2PSellRate("VES"), // Usamos la nueva función para obtener la tasa de venta de VES
-    ]);
+    try {
+        const [spotPrice, clpBuyPrices, vesSellPrices] = await Promise.all([
+            getSpotRate(),
+            getP2PRates({ fiat: 'CLP', tradeType: 'BUY' }),
+            getP2PRates({ fiat: 'VES', tradeType: 'SELL' }),
+        ]);
 
-    // Construir la respuesta final, usando el valor real si existe, o el de fallback si no.
-    res.status(200).json({
-      success: true,
-      WLD_to_USDT: spotPrice || FALLBACK_RATES.WLD_to_USDT,
-      USDT_to_CLP_P2P: clpBuyRate || FALLBACK_RATES.USDT_to_CLP_P2P,
-      VES_per_USDT_SELL: vesSellRate || FALLBACK_RATES.VES_to_USDT_P2P, // Renombrado para mayor claridad
-    });
-  } catch (error) {
-    console.error("Error general en Vercel Function:", error.message);
-    // Si todo falla, retornar un error y los valores de fallback
-    res.status(500).json({
-      success: false,
-      message: "Error al procesar tasas, usando valores de referencia.",
-      ...FALLBACK_RATES,
-    });
-  }
+        const clpBuyRate = pickOffer(clpBuyPrices, { average: 3 }) || FALLBACK_RATES.USDT_to_CLP_P2P;
+        const vesSellRate = pickOffer(vesSellPrices, { index: 3 }) || FALLBACK_RATES.VES_per_USDT_SELL;
+        const wldSpot = spotPrice || FALLBACK_RATES.WLD_to_USDT;
+
+        res.status(200).json({
+            success: true,
+            WLD_to_USDT: wldSpot,
+            USDT_to_CLP_P2P: clpBuyRate,
+            VES_per_USDT_SELL: vesSellRate,
+            meta: {
+                spotSource: spotPrice ? 'binance_spot' : 'fallback',
+                clpOffers: clpBuyPrices.length,
+                vesOffers: vesSellPrices.length,
+                apiKeyAttached: Boolean(BINANCE_API_KEY && BINANCE_API_SECRET),
+            },
+        });
+    } catch (error) {
+        console.error('Error general al obtener tasas:', error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Error al procesar tasas, usando valores de referencia.',
+            ...FALLBACK_RATES,
+        });
+    }
 };
