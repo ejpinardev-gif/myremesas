@@ -44,6 +44,7 @@ test("modal markup exposes accessible dialog semantics", () => {
 
 test("the frontend exposes opt-in push notification controls", () => {
   assert.match(html, /id="push-notification-control"/);
+  assert.match(html, /name="fcm-vapid-key" content="[A-Za-z0-9_-]+"/);
   assert.match(html, /id="enable-push-notifications"/);
   assert.match(html, /id="disable-push-notifications"/);
   assert.match(main, /firebase-messaging-sw\.js/);
