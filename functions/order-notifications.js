@@ -70,12 +70,11 @@ async function sendOrderNotifications({ db, messaging, userId, transactionId, be
 
   const collectionPath = `artifacts/1:775892034675:web:98ed2724bcaff2ed427606/users/${userId}/notificationTokens`;
   const tokenSnapshot = await db.collection(collectionPath)
-    .where("enabled", "==", true)
     .limit(MAX_TOKENS_PER_BATCH)
     .get();
   const entries = tokenSnapshot.docs
-    .map((document) => ({ id: document.id, token: document.data().token }))
-    .filter(({ token }) => typeof token === "string" && token.length > 0 && token.length <= 4096);
+    .map((document) => ({ id: document.id, token: document.data().token, enabled: document.data().enabled }))
+    .filter(({ token, enabled }) => enabled === true && typeof token === "string" && token.length > 0 && token.length <= 4096);
 
   if (!entries.length) return { sent: 0, removed: 0, skipped: true };
 
