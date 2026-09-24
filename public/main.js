@@ -12,6 +12,8 @@ import { getFirestore, doc, onSnapshot, collection, query, orderBy, limit, start
 
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
+import { deleteToken, getMessaging, getToken, isSupported, onMessage } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-messaging.js";
+
 // Evita ruido excesivo y costos de diagnóstico confusos en producción
 setLogLevel('error');
 
@@ -24,6 +26,8 @@ const ADMIN_UIDS = [
 
 const PASSWORD_RESET_URL = 'https://myremesas-prod-deploy.vercel.app/';
 const CREATE_ORDER_API_URL = 'https://us-central1-studio-7601782447-44d81.cloudfunctions.net/createOrder';
+const FCM_SERVICE_WORKER_PATH = '/firebase-messaging-sw.js';
+const FCM_VAPID_KEY = document.querySelector('meta[name="fcm-vapid-key"]')?.content?.trim() || '';
 
 // Variables Globales de Firebase (provistas por el entorno)
 const appId = "1:775892034675:web:98ed2724bcaff2ed427606";
@@ -32,6 +36,11 @@ const firebaseConfig = {"apiKey":"AIzaSyCnXU8XU7ZzA_12CDaYaY9W2rWBmkGLB-g","auth
 let db;
 let auth;
 let storage;
+let firebaseApp;
+let messaging;
+let messagingUnsubscribe;
+let pushRegistration;
+let currentPushToken;
 let userId = null;
 let isAuthReady = false;
 
@@ -68,6 +77,7 @@ let adminTransactionsUnsubscribe = null;
 let transactionListenerUnsubscribe = null;
 let adminAccountsUnsubscribe = null;
 let authContainer, appContainer, authFormsSection, registerForm, loginForm, resetPasswordForm, logoutButton, showRegisterButton, showLoginButton, showResetPasswordButton, showLoginFromResetButton;
+let pushNotificationControl, pushNotificationStatus, enablePushNotificationsButton, disablePushNotificationsButton;
 let registerStatus, loginStatus, resetPasswordStatus;
 let usdtDestinationSaveTimeout = null;
 let vesDestinationSaveTimeout = null;
@@ -236,6 +246,10 @@ function initializeDOM() {
     historySection = document.getElementById('history-section');
     amountLoadingIndicator = document.getElementById('amount-loading-indicator');
     historyLoadMoreButton = document.getElementById('history-load-more-button');
+    pushNotificationControl = document.getElementById('push-notification-control');
+    pushNotificationStatus = document.getElementById('push-notification-status');
+    enablePushNotificationsButton = document.getElementById('enable-push-notifications');
+    disablePushNotificationsButton = document.getElementById('disable-push-notifications');
 }
 
 async function initializeFirebase() {
@@ -245,6 +259,7 @@ async function initializeFirebase() {
             return;
         }
         const app = initializeApp(firebaseConfig);
+        firebaseApp = app;
         db = getFirestore(app);
         auth = getAuth(app);
         storage = getStorage(app);
@@ -267,6 +282,10 @@ async function initializeFirebase() {
                 }
                 userIdContainer.classList.remove('hidden');
                 authStatus.textContent = "Autenticado. Listo para usar.";
+                if (pushNotificationControl) pushNotificationControl.classList.remove('hidden');
+                setupPushNotifications(user).catch((error) => {
+                    console.warn('No se pudo inicializar las notificaciones push:', error);
+                });
                 isAuthReady = true;
                 clearRealtimeListeners();
                 const isAdminUser = ADMIN_UIDS.includes(userId);
@@ -292,7 +311,7 @@ async function initializeFirebase() {
                 hasLoadedAdminConfigRealtime = false;
                 adminTransactionsCursor = null;
                 adminTransactionsHasMore = false;
-                await activateView('calculator');
+                await activateView(getInitialView());
             } else {
                 if (user && user.isAnonymous) {
                     await signOut(auth);
@@ -305,6 +324,7 @@ async function initializeFirebase() {
                 if(authStatus) authStatus.textContent = "Por favor, inicie sesión o regístrese.";
                 if(userIdContainer) userIdContainer.classList.add('hidden');
                 if (authFormsSection) authFormsSection.classList.remove('hidden');
+                if (pushNotificationControl) pushNotificationControl.classList.add('hidden');
                 if (loginForm) loginForm.classList.remove('hidden');
                 if (registerForm) registerForm.classList.add('hidden');
                 if (resetPasswordForm) resetPasswordForm.classList.add('hidden');
@@ -362,6 +382,171 @@ function clearAuthFormStatuses() {
         status.textContent = '';
         status.classList.add('hidden');
     });
+}
+
+function setPushNotificationStatus(message, tone = 'neutral') {
+    if (!pushNotificationStatus) return;
+    pushNotificationStatus.textContent = message;
+    pushNotificationStatus.classList.remove('text-slate-500', 'text-emerald-600', 'text-amber-600', 'text-red-600');
+    const toneClass = {
+        success: 'text-emerald-600',
+        warning: 'text-amber-600',
+        error: 'text-red-600',
+        neutral: 'text-slate-500',
+    }[tone] || 'text-slate-500';
+    pushNotificationStatus.classList.add(toneClass);
+}
+
+async function getPushTokenDocumentId(token) {
+    if (!globalThis.crypto?.subtle) {
+        throw new Error('Este navegador no permite registrar notificaciones push.');
+    }
+    const bytes = new TextEncoder().encode(token);
+    const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function ensurePushMessaging() {
+    if (!firebaseApp) throw new Error('Firebase no está listo para registrar notificaciones.');
+    if (!('serviceWorker' in navigator)) {
+        throw new Error('Este navegador no soporta notificaciones push.');
+    }
+    const supported = await isSupported();
+    if (!supported) throw new Error('Este navegador no soporta Firebase Cloud Messaging.');
+
+    if (!pushRegistration) {
+        pushRegistration = await navigator.serviceWorker.register(FCM_SERVICE_WORKER_PATH, { scope: '/' });
+    }
+    if (!messaging) {
+        messaging = getMessaging(firebaseApp);
+        messagingUnsubscribe = onMessage(messaging, (payload) => {
+            const message = payload?.data?.body || payload?.notification?.body;
+            if (message) showToast(message, 'info');
+        });
+    }
+    return messaging;
+}
+
+async function syncPushNotificationToken(user) {
+    const messagingInstance = await ensurePushMessaging();
+    const tokenOptions = { serviceWorkerRegistration: pushRegistration };
+    if (FCM_VAPID_KEY) tokenOptions.vapidKey = FCM_VAPID_KEY;
+    const token = await getToken(messagingInstance, tokenOptions);
+    if (!token) throw new Error('El navegador no devolvió un token de notificaciones.');
+
+    const tokenId = await getPushTokenDocumentId(token);
+    const tokenRef = doc(db, 'artifacts', appId, 'users', user.uid, 'notificationTokens', tokenId);
+    await setDoc(tokenRef, {
+        token,
+        platform: 'web',
+        userAgent: navigator.userAgent.slice(0, 256),
+        enabled: true,
+        userId: user.uid,
+        updatedAt: serverTimestamp(),
+    }, { merge: true });
+    currentPushToken = token;
+    return token;
+}
+
+async function setupPushNotifications(user) {
+    if (!pushNotificationControl) return;
+    pushNotificationControl.classList.remove('hidden');
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+        setPushNotificationStatus('Notificaciones no disponibles en este navegador.', 'warning');
+        if (enablePushNotificationsButton) enablePushNotificationsButton.classList.add('hidden');
+        if (disablePushNotificationsButton) disablePushNotificationsButton.classList.add('hidden');
+        return;
+    }
+
+    const permission = Notification.permission;
+    if (permission === 'denied') {
+        setPushNotificationStatus('Notificaciones bloqueadas por el navegador.', 'warning');
+        if (enablePushNotificationsButton) enablePushNotificationsButton.classList.add('hidden');
+        if (disablePushNotificationsButton) disablePushNotificationsButton.classList.add('hidden');
+        return;
+    }
+
+    if (permission === 'granted') {
+        try {
+            await syncPushNotificationToken(user);
+            setPushNotificationStatus('Notificaciones activadas para este dispositivo.', 'success');
+            if (enablePushNotificationsButton) enablePushNotificationsButton.classList.add('hidden');
+            if (disablePushNotificationsButton) disablePushNotificationsButton.classList.remove('hidden');
+        } catch (error) {
+            console.warn('No se pudo sincronizar el token push:', error);
+            setPushNotificationStatus('Activa las notificaciones para recibir cambios de tus órdenes.', 'warning');
+            if (enablePushNotificationsButton) enablePushNotificationsButton.classList.remove('hidden');
+            if (disablePushNotificationsButton) disablePushNotificationsButton.classList.add('hidden');
+        }
+        return;
+    }
+
+    setPushNotificationStatus('Recebe cambios de tus órdenes aunque cierres la app.', 'neutral');
+    if (enablePushNotificationsButton) enablePushNotificationsButton.classList.remove('hidden');
+    if (disablePushNotificationsButton) disablePushNotificationsButton.classList.add('hidden');
+}
+
+async function requestPushNotifications() {
+    if (!auth?.currentUser) return;
+    if (enablePushNotificationsButton) enablePushNotificationsButton.disabled = true;
+    setPushNotificationStatus('Solicitando permiso...', 'neutral');
+    try {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+            throw new Error('El permiso de notificaciones no fue concedido.');
+        }
+        await syncPushNotificationToken(auth.currentUser);
+        setPushNotificationStatus('Notificaciones activadas para este dispositivo.', 'success');
+        if (enablePushNotificationsButton) enablePushNotificationsButton.classList.add('hidden');
+        if (disablePushNotificationsButton) disablePushNotificationsButton.classList.remove('hidden');
+        showToast('Notificaciones de órdenes activadas.', 'success');
+    } catch (error) {
+        console.warn('No se pudieron activar las notificaciones push:', error);
+        setPushNotificationStatus('No se pudieron activar las notificaciones.', 'error');
+        showToast(error?.message || 'No se pudieron activar las notificaciones.', 'error');
+    } finally {
+        if (enablePushNotificationsButton) enablePushNotificationsButton.disabled = false;
+    }
+}
+
+async function clearStoredPushTokens(uid) {
+    if (!db || !uid) return;
+    const tokenCollection = collection(db, 'artifacts', appId, 'users', uid, 'notificationTokens');
+    const snapshot = await getDocs(tokenCollection);
+    await Promise.allSettled(snapshot.docs.map((tokenDocument) => deleteDoc(tokenDocument.ref)));
+}
+
+async function disablePushNotifications({ silent = false, uid = userId } = {}) {
+    try {
+        if (messaging) await deleteToken(messaging);
+        await clearStoredPushTokens(uid);
+        currentPushToken = null;
+        setPushNotificationStatus('Notificaciones desactivadas para este dispositivo.', 'neutral');
+        if (enablePushNotificationsButton) enablePushNotificationsButton.classList.remove('hidden');
+        if (disablePushNotificationsButton) disablePushNotificationsButton.classList.add('hidden');
+        if (!silent) showToast('Notificaciones desactivadas.', 'success');
+    } catch (error) {
+        console.warn('No se pudieron desactivar las notificaciones push:', error);
+        if (!silent) {
+            setPushNotificationStatus('No se pudieron desactivar las notificaciones.', 'error');
+            showToast('No se pudieron desactivar las notificaciones.', 'error');
+        }
+    }
+}
+
+async function logoutCurrentUser() {
+    await disablePushNotifications({ silent: true });
+    try {
+        await signOut(auth);
+    } catch (error) {
+        console.error('Error al cerrar sesión:', error);
+        showToast('No se pudo cerrar la sesión. Intenta nuevamente.', 'error');
+    }
+}
+
+function getInitialView() {
+    const requestedView = new URLSearchParams(window.location.search).get('view');
+    return requestedView === 'history' ? 'history' : 'calculator';
 }
 
 function setAuthFormBusy(form, isBusy, busyLabel = 'Procesando...') {
@@ -472,12 +657,7 @@ function setupAuthEventListeners() {
     });
 
     logoutButton?.addEventListener('click', async () => {
-        try {
-            await signOut(auth);
-        } catch (error) {
-            console.error('Error al cerrar sesión:', error);
-            showToast('No se pudo cerrar la sesión. Intenta nuevamente.', 'error');
-        }
+        await logoutCurrentUser();
     });
 }
 
@@ -2582,8 +2762,18 @@ function registerStaticEventListeners() {
     const shareQuoteButton = document.getElementById('share-quote-button');
     if (shareQuoteButton) shareQuoteButton.addEventListener('click', shareQuote);
     if (closeModalButton) closeModalButton.addEventListener('click', closePaymentModal);
+    if (enablePushNotificationsButton) {
+        enablePushNotificationsButton.addEventListener('click', () => {
+            requestPushNotifications().catch((error) => console.error('Error al activar notificaciones:', error));
+        });
+    }
+    if (disablePushNotificationsButton) {
+        disablePushNotificationsButton.addEventListener('click', () => {
+            disablePushNotifications().catch((error) => console.error('Error al desactivar notificaciones:', error));
+        });
+    }
     if (menuLogoutButton) menuLogoutButton.addEventListener('click', async () => {
-        await signOut(auth);
+        await logoutCurrentUser();
     });
     if (adminAccountSelect) adminAccountSelect.addEventListener('change', handleAdminAccountSelection);
     if (selectedAdminAccountDetails) selectedAdminAccountDetails.addEventListener('click', (event) => {

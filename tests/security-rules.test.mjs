@@ -186,6 +186,51 @@ test("a user can cancel only a non-final order", async () => {
   }));
 });
 
+test("users can manage only their own push notification tokens", async () => {
+  const ownerDb = userDb(OWNER_UID);
+  const tokenRef = doc(ownerDb, "artifacts", APP_ID, "users", OWNER_UID, "notificationTokens", "token-1");
+  const otherUserTokenRef = doc(ownerDb, "artifacts", APP_ID, "users", OTHER_UID, "notificationTokens", "token-2");
+
+  await assertSucceeds(setDoc(tokenRef, {
+    token: "fcm-token-value",
+    platform: "web",
+    userAgent: "Mozilla/5.0",
+    enabled: true,
+    userId: OWNER_UID,
+    updatedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(deleteDoc(tokenRef));
+  await assertFails(setDoc(otherUserTokenRef, {
+    token: "forged-token",
+    platform: "web",
+    userAgent: "Mozilla/5.0",
+    enabled: true,
+    userId: OWNER_UID,
+    updatedAt: serverTimestamp(),
+  }));
+  await assertFails(setDoc(tokenRef, {
+    token: "disabled-token",
+    platform: "web",
+    userAgent: "Mozilla/5.0",
+    enabled: false,
+    userId: OWNER_UID,
+    updatedAt: serverTimestamp(),
+  }));
+});
+
+test("unauthenticated users cannot register push notification tokens", async () => {
+  const unauthenticatedDb = testEnv.unauthenticatedContext().firestore();
+  const tokenRef = doc(unauthenticatedDb, "artifacts", APP_ID, "users", OWNER_UID, "notificationTokens", "token-3");
+  await assertFails(setDoc(tokenRef, {
+    token: "unauthenticated-token",
+    platform: "web",
+    userAgent: "Mozilla/5.0",
+    enabled: true,
+    userId: OWNER_UID,
+    updatedAt: serverTimestamp(),
+  }));
+});
+
 test("another user cannot read the transaction", async () => {
   const db = userDb(OWNER_UID);
   await seedTransaction();

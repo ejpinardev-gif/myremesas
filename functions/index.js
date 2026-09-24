@@ -1,8 +1,11 @@
 const { logger } = require("firebase-functions");
 const { onRequest } = require("firebase-functions/v2/https");
+const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
+const { getMessaging } = require("firebase-admin/messaging");
 const { FieldValue, getFirestore } = require("firebase-admin/firestore");
+const { sendOrderNotifications } = require("./order-notifications");
 
 initializeApp();
 
@@ -264,3 +267,31 @@ async function createOrder(req, res) {
 }
 
 exports.createOrder = onRequest({ region: "us-central1", timeoutSeconds: 30 }, createOrder);
+
+exports.notifyOrderStatus = onDocumentWritten({
+  document: "artifacts/{appId}/users/{userId}/transactions/{transactionId}",
+  region: "us-central1",
+  retry: true,
+}, async (event) => {
+  const before = event.data.before.exists ? event.data.before.data() : null;
+  const after = event.data.after.exists ? event.data.after.data() : null;
+  if (!after) return;
+
+  const result = await sendOrderNotifications({
+    db,
+    messaging: getMessaging(),
+    userId: event.params.userId,
+    transactionId: event.params.transactionId,
+    before,
+    after,
+  });
+
+  if (!result.skipped) {
+    logger.info("Sent order status notification", {
+      uid: event.params.userId,
+      transactionId: event.params.transactionId,
+      sent: result.sent,
+      removed: result.removed,
+    });
+  }
+});

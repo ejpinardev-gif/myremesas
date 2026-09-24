@@ -14,7 +14,7 @@
   "scripts": {
     "start": "node server.js",
     "build": "tailwindcss -i ./public/styles/input.css -o ./public/styles/output.css",
-    "test": "node --test tests/firebase-auth.test.mjs tests/binance-balance.test.mjs tests/order-validation.test.mjs tests/frontend-contract.test.mjs",
+    "test": "node --test tests/firebase-auth.test.mjs tests/binance-balance.test.mjs tests/order-validation.test.mjs tests/order-notifications.test.mjs tests/frontend-contract.test.mjs",
     "test:rules": "firebase emulators:exec --project demo-myremesas-rules --only firestore,storage \"node --test tests/*.test.mjs\"",
     "test:function": "firebase emulators:exec --project demo-myremesas-rules --only auth,firestore,storage,functions \"node functions/create-order-smoke.mjs\""
   },

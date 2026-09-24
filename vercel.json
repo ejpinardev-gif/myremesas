@@ -19,6 +19,11 @@
     },
     { "src": "/api/rates", "dest": "/api/rates.js" },
     { "src": "/api/binance-balance", "dest": "/api/binance-balance.js" },
+    {
+      "src": "/firebase-messaging-sw.js",
+      "headers": { "Cache-Control": "no-cache, no-store, must-revalidate" },
+      "dest": "/public/firebase-messaging-sw.js"
+    },
     { "src": "/(.*)", "dest": "/public/$1" }
   ]
 }

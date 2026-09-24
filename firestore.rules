@@ -89,6 +89,21 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /artifacts/{appId}/users/{userId}/notificationTokens/{tokenId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId)
+        && request.resource.data.keys().hasOnly([
+          'token', 'platform', 'userAgent', 'enabled', 'updatedAt', 'userId'
+        ])
+        && request.resource.data.userId == userId
+        && request.resource.data.platform == 'web'
+        && request.resource.data.enabled == true
+        && isShortString(request.resource.data.token, 4096)
+        && isShortString(request.resource.data.userAgent, 256)
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isOwner(userId);
+    }
+
     match /{path=**}/transactions/{transactionId} {
       allow read: if isAdmin();
     }

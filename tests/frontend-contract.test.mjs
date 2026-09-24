@@ -42,6 +42,15 @@ test("modal markup exposes accessible dialog semantics", () => {
   assert.match(html, /id="image-viewer-title"/);
 });
 
+test("the frontend exposes opt-in push notification controls", () => {
+  assert.match(html, /id="push-notification-control"/);
+  assert.match(html, /id="enable-push-notifications"/);
+  assert.match(html, /id="disable-push-notifications"/);
+  assert.match(main, /firebase-messaging-sw\.js/);
+  assert.match(main, /getToken/);
+  assert.equal(fs.existsSync("public/firebase-messaging-sw.js"), true);
+});
+
 test("the frontend requests the protected balance endpoint with a bearer token", () => {
   assert.match(main, /Authorization: `Bearer \$\{idToken\}`/);
   assert.match(main, /getIdToken\(\)/);

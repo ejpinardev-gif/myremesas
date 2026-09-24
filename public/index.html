@@ -1502,6 +1502,13 @@
             <p class="app-header-subtitle text-sm text-slate-500 mt-3 max-w-2xl">Calculadora, seguimiento de órdenes y operación administrativa en una sola mesa de cambio.</p>
 
             <p id="auth-status" class="text-xs text-slate-500 mt-2">Inicializando...</p>
+
+            <div id="push-notification-control" class="hidden mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2" aria-live="polite">
+                <span class="text-xs font-medium text-slate-600">Notificaciones de órdenes</span>
+                <span id="push-notification-status" class="text-xs text-slate-500">Recebe cambios aunque cierres la app.</span>
+                <button id="enable-push-notifications" type="button" class="btn btn-outline btn-sm">Activar</button>
+                <button id="disable-push-notifications" type="button" class="btn btn-ghost btn-sm hidden">Desactivar</button>
+            </div>
         </header>
 
         <div id="menu-backdrop" class="menu-backdrop hidden"></div>
