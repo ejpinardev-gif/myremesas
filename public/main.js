@@ -2420,6 +2420,7 @@ async function handleAdminTransactionsListClick(event) {
                     statusElement.textContent = 'Orden cancelada por el administrador.';
                     statusElement.className = 'admin-upload-status text-xs text-gray-600';
                 }
+                setupAdminTransactionsListener().catch((error) => console.error('Error al refrescar el panel admin:', error));
             })
             .catch(error => {
                 console.error('Error al cancelar orden (admin):', error);
@@ -2465,6 +2466,7 @@ async function handleAdminTransactionsListClick(event) {
         .then(() => {
             statusElement.textContent = 'Comprobante subido y orden completada.';
             statusElement.className = 'admin-upload-status text-xs text-green-600';
+            setupAdminTransactionsListener().catch((error) => console.error('Error al refrescar el panel admin:', error));
         })
         .catch(error => {
             statusElement.textContent = `Error: ${error.message}`;
