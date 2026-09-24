@@ -22,6 +22,12 @@ My Remesas is a Firebase-backed web app for calculating CLP, VES, USDT and WLD e
 
 The Binance balance endpoint requires a Firebase ID token from an administrator. Proxy credentials are server-side environment variables and must never be committed.
 
+## Order notifications
+
+Users can opt in to browser push notifications from the authenticated panel. The client registers a Firebase Messaging service worker and stores only the user's own registration tokens. The `notifyOrderStatus` Firestore trigger sends privacy-safe notifications when an order is created or changes to `Pendiente`, `Completado` or `Cancelada`; transfer amounts are never included in the notification text.
+
+The public VAPID key is configured in `public/index.html`. Browser notification permission is always user-controlled and must be granted before a device can receive messages.
+
 ## Local verification
 
 ```bash
