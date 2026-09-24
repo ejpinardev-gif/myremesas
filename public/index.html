@@ -663,6 +663,77 @@
             flex-shrink: 0;
         }
 
+        .admin-metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.75rem;
+        }
+
+        .admin-metric {
+            min-width: 0;
+            padding: 1rem 1.05rem;
+            border-radius: 1.1rem;
+            border: 1px solid var(--line);
+            background: #fbfaf8;
+        }
+
+        .admin-metric-pending {
+            background: linear-gradient(145deg, #fffdf7, #fff7e6);
+            border-color: rgba(217, 119, 6, 0.2);
+        }
+
+        .admin-metric-completed {
+            background: linear-gradient(145deg, #f8fffb, #ecfdf5);
+            border-color: rgba(5, 150, 105, 0.18);
+        }
+
+        .admin-metric-cancelled {
+            background: linear-gradient(145deg, #fbfcfd, #f1f5f9);
+            border-color: rgba(100, 116, 139, 0.18);
+        }
+
+        .admin-metric-label {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            color: var(--ink-soft);
+            font-size: 0.76rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .admin-metric-value {
+            display: block;
+            margin-top: 0.55rem;
+            color: var(--ink);
+            font-size: clamp(1.8rem, 4vw, 2.5rem);
+            line-height: 1;
+            letter-spacing: -0.04em;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .admin-metric-caption {
+            display: block;
+            margin-top: 0.45rem;
+            color: var(--ink-muted);
+            font-size: 0.72rem;
+        }
+
+        .admin-column-count {
+            display: inline-grid;
+            place-items: center;
+            min-width: 1.45rem;
+            height: 1.45rem;
+            margin-left: auto;
+            padding: 0 0.4rem;
+            border-radius: 0.55rem;
+            background: rgba(15, 23, 42, 0.06);
+            color: var(--ink-soft);
+            font-size: 0.72rem;
+            font-variant-numeric: tabular-nums;
+        }
+
         .m3-result-card {
             margin-top: 1.4rem;
             padding: 1.3rem 1.25rem;
@@ -1217,6 +1288,10 @@
                 border-color: rgba(217, 119, 6, 0.16);
             }
 
+            .admin-metrics-grid {
+                grid-template-columns: 1fr;
+            }
+
             .m3-result-card {
                 margin-top: 1.1rem;
                 padding: 1.05rem 1rem;
@@ -1743,13 +1818,45 @@
             <div class="m3-hero mb-6">
                 <div class="flex items-start gap-4">
                     <span class="m3-icon-surface" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6M7 4h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></svg></span>
-                    <div class="min-w-0"><p class="m3-hero-kicker">Panel operativo</p><h2 class="section-title text-3xl mt-1">Solicitudes activas</h2><p id="admin-orders-status" class="text-sm text-slate-500 mt-2">Abre esta vista para cargar solicitudes.</p></div>
+                    <div class="min-w-0">
+                        <p class="m3-hero-kicker">Centro de control</p>
+                        <h2 class="section-title text-3xl mt-1">Órdenes</h2>
+                        <p id="admin-orders-status" class="text-sm text-slate-500 mt-2">Abre esta vista para cargar el resumen operativo.</p>
+                    </div>
                 </div>
                 <div class="mt-4 flex justify-end"><button id="admin-load-more-button" class="btn btn-outline btn-sm hidden">Cargar más</button></div>
             </div>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                <section class="m3-column"><h3 class="m3-column-title mb-4"><span class="m3-status-dot bg-amber-400"></span>Pendientes por antigüedad</h3><div id="admin-pending-transactions" class="space-y-4"></div></section>
-                <section class="m3-column"><h3 class="m3-column-title mb-4"><span class="m3-status-dot bg-emerald-400"></span>Completadas recientes</h3><div id="admin-completed-transactions" class="space-y-4"></div></section>
+            <div class="admin-metrics-grid mb-6" aria-label="Resumen de órdenes">
+                <article class="admin-metric admin-metric-pending">
+                    <div class="admin-metric-label"><span class="m3-status-dot bg-amber-400"></span><span>Pendientes</span></div>
+                    <strong id="admin-pending-count" class="admin-metric-value">0</strong>
+                    <span class="admin-metric-caption">Requieren seguimiento</span>
+                </article>
+                <article class="admin-metric admin-metric-completed">
+                    <div class="admin-metric-label"><span class="m3-status-dot bg-emerald-400"></span><span>Completadas</span></div>
+                    <strong id="admin-completed-count" class="admin-metric-value">0</strong>
+                    <span class="admin-metric-caption">Procesadas recientemente</span>
+                </article>
+                <article class="admin-metric admin-metric-cancelled">
+                    <div class="admin-metric-label"><span class="m3-status-dot bg-slate-400"></span><span>Canceladas</span></div>
+                    <strong id="admin-cancelled-count" class="admin-metric-value">0</strong>
+                    <span class="admin-metric-caption">Cerradas sin completar</span>
+                </article>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                <section class="m3-column">
+                    <div class="m3-column-title mb-4"><span class="m3-status-dot bg-amber-400"></span><span>Pendientes</span><span id="admin-pending-column-count" class="admin-column-count">0</span></div>
+                    <div id="admin-pending-transactions" class="space-y-4"></div>
+                </section>
+                <section class="m3-column">
+                    <div class="m3-column-title mb-4"><span class="m3-status-dot bg-emerald-400"></span><span>Completadas</span><span id="admin-completed-column-count" class="admin-column-count">0</span></div>
+                    <div id="admin-completed-transactions" class="space-y-4"></div>
+                </section>
+                <section class="m3-column">
+                    <div class="m3-column-title mb-4"><span class="m3-status-dot bg-slate-400"></span><span>Canceladas</span><span id="admin-cancelled-column-count" class="admin-column-count">0</span></div>
+                    <div id="admin-cancelled-transactions" class="space-y-4"></div>
+                </section>
             </div>
         </div>
 

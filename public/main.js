@@ -79,6 +79,8 @@ let adminAccountsUnsubscribe = null;
 let authContainer, appContainer, authFormsSection, registerForm, loginForm, resetPasswordForm, logoutButton, showRegisterButton, showLoginButton, showResetPasswordButton, showLoginFromResetButton;
 let pushNotificationControl, pushNotificationStatus, enablePushNotificationsButton, disablePushNotificationsButton;
 let adminHistoryCallout;
+let adminCancelledTransactionsList, adminPendingCount, adminCompletedCount, adminCancelledCount;
+let adminPendingColumnCount, adminCompletedColumnCount, adminCancelledColumnCount;
 let registerStatus, loginStatus, resetPasswordStatus;
 let usdtDestinationSaveTimeout = null;
 let vesDestinationSaveTimeout = null;
@@ -198,6 +200,13 @@ function initializeDOM() {
     adminTransactionsSection = document.getElementById('admin-transactions-section');
     adminPendingTransactionsList = document.getElementById('admin-pending-transactions');
     adminCompletedTransactionsList = document.getElementById('admin-completed-transactions');
+    adminCancelledTransactionsList = document.getElementById('admin-cancelled-transactions');
+    adminPendingCount = document.getElementById('admin-pending-count');
+    adminCompletedCount = document.getElementById('admin-completed-count');
+    adminCancelledCount = document.getElementById('admin-cancelled-count');
+    adminPendingColumnCount = document.getElementById('admin-pending-column-count');
+    adminCompletedColumnCount = document.getElementById('admin-completed-column-count');
+    adminCancelledColumnCount = document.getElementById('admin-cancelled-column-count');
     adminOrdersStatus = document.getElementById('admin-orders-status');
     adminLoadMoreButton = document.getElementById('admin-load-more-button');
     usdtDestinationForm = document.getElementById('usdt-destination-form');
@@ -307,6 +316,8 @@ async function initializeFirebase() {
                         adminTransactionsSection.classList.add('hidden');
                         if (adminPendingTransactionsList) adminPendingTransactionsList.innerHTML = '';
                         if (adminCompletedTransactionsList) adminCompletedTransactionsList.innerHTML = '';
+                        if (adminCancelledTransactionsList) adminCancelledTransactionsList.innerHTML = '';
+                        setAdminOrderCounts(0, 0, 0);
                     }
                 }
                 hasLoadedUserHistory = false;
@@ -337,6 +348,10 @@ async function initializeFirebase() {
                 if (adminToggleContainer) adminToggleContainer.classList.add('hidden');
                 if (historyContainer) historyContainer.innerHTML = '<p class="text-gray-500 text-sm p-2">Inicie sesión para ver su historial.</p>';
                 if (adminTransactionsSection) adminTransactionsSection.classList.add('hidden');
+                if (adminPendingTransactionsList) adminPendingTransactionsList.innerHTML = '';
+                if (adminCompletedTransactionsList) adminCompletedTransactionsList.innerHTML = '';
+                if (adminCancelledTransactionsList) adminCancelledTransactionsList.innerHTML = '';
+                setAdminOrderCounts(0, 0, 0);
                 authContainer.classList.remove('hidden');
                 appContainer.classList.add('hidden');
                 marginConfig = { ...DEFAULT_MARGIN_CONFIG };
@@ -1133,6 +1148,20 @@ function setAdminOrdersStatus(message, isError = false) {
     adminOrdersStatus.textContent = message;
     adminOrdersStatus.classList.toggle('text-red-600', isError);
     adminOrdersStatus.classList.toggle('text-slate-500', !isError);
+}
+
+function setAdminOrderCounts(pending, completed, cancelled) {
+    const values = { pending, completed, cancelled };
+    const metricIds = {
+        pending: [adminPendingCount, adminPendingColumnCount],
+        completed: [adminCompletedCount, adminCompletedColumnCount],
+        cancelled: [adminCancelledCount, adminCancelledColumnCount],
+    };
+    Object.entries(values).forEach(([key, value]) => {
+        metricIds[key].forEach((element) => {
+            if (element) element.textContent = String(value);
+        });
+    });
 }
 
 function updateAdminLoadMoreButton() {
@@ -2170,13 +2199,15 @@ async function uploadReceiptFromHistory(transactionId, file) {
 }
 
 async function setupAdminTransactionsListener({ append = false } = {}) {
-    if (!db || !isCurrentUserAdmin || !adminPendingTransactionsList || !adminCompletedTransactionsList) return;
+    if (!db || !isCurrentUserAdmin || !adminPendingTransactionsList || !adminCompletedTransactionsList || !adminCancelledTransactionsList) return;
 
     if (!append) {
         adminTransactionsCursor = null;
         adminTransactionsHasMore = false;
         renderSkeletonList(adminPendingTransactionsList, 2);
         renderSkeletonList(adminCompletedTransactionsList, 2);
+        renderSkeletonList(adminCancelledTransactionsList, 2);
+        setAdminOrderCounts(0, 0, 0);
         setAdminOrdersStatus('Cargando órdenes recientes...');
     } else {
         setAdminOrdersStatus('Cargando más órdenes...');
@@ -2219,12 +2250,14 @@ async function setupAdminTransactionsListener({ append = false } = {}) {
                 const errorMarkup = '<p class="text-sm text-red-600">Error al cargar las ordenes.</p>';
                 adminPendingTransactionsList.innerHTML = errorMarkup;
                 adminCompletedTransactionsList.innerHTML = errorMarkup;
+                adminCancelledTransactionsList.innerHTML = errorMarkup;
                 setAdminOrdersStatus('Falta desplegar el índice de Firestore para ordenar órdenes por fecha. Ejecuta el deploy de índices y vuelve a intentar.', true);
             }
         } else {
             const errorMarkup = '<p class="text-sm text-red-600">Error al cargar las ordenes.</p>';
             adminPendingTransactionsList.innerHTML = errorMarkup;
             adminCompletedTransactionsList.innerHTML = errorMarkup;
+            adminCancelledTransactionsList.innerHTML = errorMarkup;
             setAdminOrdersStatus('No se pudieron cargar las órdenes.', true);
         }
         adminTransactionsHasMore = false;
@@ -2247,25 +2280,32 @@ async function loadAdminTransactionsWithoutIndexFallback() {
 }
 
 function renderAdminTransactions(transactions, { append = false } = {}) {
-    if (!adminTransactionsSection || !adminPendingTransactionsList || !adminCompletedTransactionsList) return;
+    if (!adminTransactionsSection || !adminPendingTransactionsList || !adminCompletedTransactionsList || !adminCancelledTransactionsList) return;
     if (!append) {
         adminPendingTransactionsList.innerHTML = '';
         adminCompletedTransactionsList.innerHTML = '';
+        adminCancelledTransactionsList.innerHTML = '';
     }
 
     const getMillis = (tx) => tx.timestamp?.seconds ? tx.timestamp.seconds * 1000 : 0;
     const pendingTransactions = transactions
-        .filter(tx => tx.status !== 'Completado')
+        .filter(tx => tx.status === 'Sin comprobante' || tx.status === 'Pendiente')
         .sort((a, b) => getMillis(a) - getMillis(b));
     const completedTransactions = transactions
         .filter(tx => tx.status === 'Completado')
         .sort((a, b) => getMillis(b) - getMillis(a));
+    const cancelledTransactions = transactions
+        .filter(tx => tx.status === 'Cancelada')
+        .sort((a, b) => getMillis(b) - getMillis(a));
 
     pendingTransactions.forEach(tx => adminPendingTransactionsList.appendChild(createAdminTransactionCard(tx)));
     completedTransactions.forEach(tx => adminCompletedTransactionsList.appendChild(createAdminTransactionCard(tx)));
+    cancelledTransactions.forEach(tx => adminCancelledTransactionsList.appendChild(createAdminTransactionCard(tx)));
 
+    setAdminOrderCounts(pendingTransactions.length, completedTransactions.length, cancelledTransactions.length);
     if (!adminPendingTransactionsList.children.length) adminPendingTransactionsList.innerHTML = '<p class="text-sm text-slate-500 p-3">No hay solicitudes pendientes.</p>';
     if (!adminCompletedTransactionsList.children.length) adminCompletedTransactionsList.innerHTML = '<p class="text-sm text-slate-500 p-3">No hay solicitudes completadas.</p>';
+    if (!adminCancelledTransactionsList.children.length) adminCancelledTransactionsList.innerHTML = '<p class="text-sm text-slate-500 p-3">No hay órdenes canceladas.</p>';
     adminTransactionsSection.classList.remove('hidden');
 }
 
@@ -2277,9 +2317,10 @@ function createAdminTransactionCard(tx) {
     const statusBadgeClass = getStatusBadgeClasses(tx.status);
     const ownerLabel = tx.userEmail || tx.userDisplayName || tx.userId || 'N/A';
     const isCompleted = tx.status === 'Completado';
-    const awaitingClientReceipt = !tx.userReceiptUrl && !isCompleted;
+    const isCancelled = tx.status === 'Cancelada';
+    const awaitingClientReceipt = !tx.userReceiptUrl && !isCompleted && !isCancelled;
     const canAdminCancel = canCancelTransaction(tx.status);
-    const completionButtonDisabled = isCompleted || awaitingClientReceipt;
+    const completionButtonDisabled = isCompleted || isCancelled || awaitingClientReceipt;
     const completionButtonText = isCompleted
         ? 'Completada'
         : awaitingClientReceipt
@@ -2332,7 +2373,7 @@ function createAdminTransactionCard(tx) {
             ${userReceiptSection}
             ${adminReceiptSection}
         </div>
-        <div class="mt-2 border-t border-slate-200 pt-3">
+        ${isCancelled ? '<p class="mt-3 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600">Esta orden fue cancelada y no admite nuevas acciones.</p>' : `<div class="mt-2 border-t border-slate-200 pt-3">
             <label class="block text-xs font-semibold text-slate-700 mb-2">Subir comprobante de destino</label>
             <div class="flex flex-col md:flex-row gap-3">
                 <input type="file" class="admin-receipt-input field-control field-control-sm flex-1 text-sm" accept="image/*,.pdf" ${completionButtonDisabled ? 'disabled' : ''}>
@@ -2340,7 +2381,7 @@ function createAdminTransactionCard(tx) {
             </div>
             <p class="admin-upload-status text-xs mt-2 hidden"></p>
             ${awaitingClientReceipt ? '<p class="text-xs text-amber-700 mt-2">Esperando comprobante del cliente para habilitar esta acción.</p>' : ''}
-        </div>
+        </div>`}
         ${cancelButtonMarkup ? `<div class="pt-2 border-t border-dashed border-slate-200 space-y-2">
             <p class="text-xs text-slate-600">Acciones administrativas</p>
             <div class="flex flex-wrap gap-2">${cancelButtonMarkup}</div>
@@ -2750,6 +2791,7 @@ function registerStaticEventListeners() {
     if (savedAccountsList) savedAccountsList.addEventListener('click', handleSavedAccountsListClick);
     if (adminPendingTransactionsList) adminPendingTransactionsList.addEventListener('click', handleAdminTransactionsListClick);
     if (adminCompletedTransactionsList) adminCompletedTransactionsList.addEventListener('click', handleAdminTransactionsListClick);
+    if (adminCancelledTransactionsList) adminCancelledTransactionsList.addEventListener('click', handleAdminTransactionsListClick);
     if (paymentButton) paymentButton.addEventListener('click', showPaymentModal);
     const shareQuoteButton = document.getElementById('share-quote-button');
     if (shareQuoteButton) shareQuoteButton.addEventListener('click', shareQuote);

@@ -45,7 +45,12 @@ test("modal markup exposes accessible dialog semantics", () => {
 test("the authenticated panel distinguishes personal and global admin history", () => {
   assert.match(html, /id="admin-history-callout"/);
   assert.match(html, /data-view="admin-orders"/);
+  assert.match(html, /id="admin-cancelled-transactions"/);
+  assert.match(html, /id="admin-pending-count"/);
+  assert.match(html, /id="admin-completed-count"/);
+  assert.match(html, /id="admin-cancelled-count"/);
   assert.match(main, /adminHistoryCallout/);
+  assert.match(main, /adminCancelledTransactionsList/);
 });
 
 test("the frontend exposes opt-in push notification controls", () => {
