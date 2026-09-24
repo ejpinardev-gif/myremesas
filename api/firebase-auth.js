@@ -1,5 +1,3 @@
-const { createRemoteJWKSet, jwtVerify } = require("jose");
-
 const DEFAULT_FIREBASE_PROJECT_ID = "studio-7601782447-44d81";
 const FIREBASE_JWKS_URL = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
 const ADMIN_UIDS = new Set([
@@ -8,13 +6,20 @@ const ADMIN_UIDS = new Set([
 ]);
 
 const jwksByProject = new Map();
+let joseModulePromise;
 
 function getFirebaseProjectId() {
   return process.env.FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_PROJECT_ID;
 }
 
-function getJwksForProject(projectId) {
+async function getJose() {
+  if (!joseModulePromise) joseModulePromise = import("jose");
+  return joseModulePromise;
+}
+
+async function getJwksForProject(projectId) {
   if (!jwksByProject.has(projectId)) {
+    const { createRemoteJWKSet } = await getJose();
     jwksByProject.set(projectId, createRemoteJWKSet(new URL(FIREBASE_JWKS_URL)));
   }
   return jwksByProject.get(projectId);
@@ -34,7 +39,8 @@ async function verifyFirebaseIdToken(idToken, options = {}) {
   }
 
   try {
-    const jwks = options.jwks || getJwksForProject(projectId);
+    const { jwtVerify } = await getJose();
+    const jwks = options.jwks || await getJwksForProject(projectId);
     const { payload } = await jwtVerify(idToken, jwks, {
       algorithms: ["RS256"],
       issuer: `https://securetoken.google.com/${projectId}`,
