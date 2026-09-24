@@ -251,10 +251,15 @@ async function createOrder(req, res) {
     });
   } catch (error) {
     logger.warn("Rejected remittance order", { code: error?.code, message: error?.message });
-    const status = error?.code === "auth/invalid-id-token"
+    const isAuthError = typeof error?.code === "string"
+      && (error.code.startsWith("auth/") || /token|credential/i.test(error.code));
+    const status = isAuthError
       ? 401
       : (error?.name === "AbortError" || /rates service/i.test(error?.message || "") ? 503 : 400);
-    return res.status(status).json({ success: false, message: error?.message || "No se pudo crear la orden." });
+    const message = status === 401
+      ? "La sesión no es válida. Vuelve a iniciar sesión."
+      : (error?.message || "No se pudo crear la orden.");
+    return res.status(status).json({ success: false, message });
   }
 }
 
