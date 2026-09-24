@@ -29,6 +29,11 @@ test("the page includes the recovery flow and canonical reset URL", () => {
   assert.match(main, /myremesas-prod-deploy\.vercel\.app/);
 });
 
+test("the page exposes one main landmark", () => {
+  assert.equal((html.match(/<main\b/g) || []).length, 1);
+  assert.match(html, /<main id="main-content">/);
+});
+
 test("modal markup exposes accessible dialog semantics", () => {
   for (const id of ["payment-details-modal", "image-viewer-modal", "confirm-modal"]) {
     assert.match(html, new RegExp(`id="${id}"[^>]*aria-modal="true"`));
