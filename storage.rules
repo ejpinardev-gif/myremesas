@@ -1,65 +1,44 @@
 rules_version = '2';
 
-
-
 service firebase.storage {
-
   match /b/{bucket}/o {
-
     function isSignedIn() {
-
       return request.auth != null;
-
     }
-
-
 
     function isAdmin() {
       return isSignedIn() && request.auth.uid in [
-        "R3QU4xRLmSQFiArCWWRwGBMEOhc2",
-        "71YiNOk9MOc6mNjxnnKBLST1Clh2"
+        'R3QU4xRLmSQFiArCWWRwGBMEOhc2',
+        '71YiNOk9MOc6mNjxnnKBLST1Clh2'
       ];
     }
 
-
-
-    // Comprobantes guardados bajo artifacts/<appId>/users/<uid>/transactions/<txId>/receipts/<tipo>/<archivo>
-
-    match /artifacts/{appId}/users/{userId}/transactions/{txId}/receipts/{receiptType}/{fileName} {
-
-      // Lectura: dueño de la orden o administrador
-
-      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
-
-
-
-      // Subida desde el cliente
-
-      allow create: if isSignedIn() && (
-
-        (receiptType == "user" && request.auth.uid == userId) ||
-
-        (receiptType == "admin" && isAdmin())
-
-      );
-
-
-
-      // Solo el admin puede reemplazar/eliminar recibos
-
-      allow delete, update: if isAdmin();
-
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isValidReceipt() {
+      return request.resource != null
+        && request.resource.size < 8 * 1024 * 1024
+        && request.resource.contentType != null
+        && (
+          request.resource.contentType.matches('image/.*')
+          || request.resource.contentType == 'application/pdf'
+        );
+    }
 
-
-    // Cualquier otra ruta, solo lectura pública (ajusta si necesitas algo distinto)
+    match /artifacts/{appId}/users/{userId}/transactions/{transactionId}/receipts/{receiptType}/{fileName} {
+      allow read: if isAdmin() || isOwner(userId);
+      allow create: if isValidReceipt() && (
+        (receiptType == 'user' && isOwner(userId))
+        || (receiptType == 'admin' && isAdmin())
+      );
+      allow update: if isAdmin() && isValidReceipt();
+      allow delete: if isAdmin();
+    }
 
     match /{allPaths=**} {
       allow read, write: if false;
     }
-
   }
-
 }
-

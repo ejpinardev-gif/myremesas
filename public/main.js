@@ -1,8 +1,14 @@
+import {
+    getReceiptFileValidationError,
+    getTransactionDestinationValidationError,
+    sanitizeReceiptFileName,
+} from './order-validation.mjs';
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 
-import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-import { getFirestore, doc, addDoc, onSnapshot, collection, query, orderBy, limit, startAfter, serverTimestamp, setLogLevel, deleteDoc, setDoc, updateDoc, collectionGroup, getDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getFirestore, doc, onSnapshot, collection, query, orderBy, limit, startAfter, serverTimestamp, setLogLevel, deleteDoc, setDoc, updateDoc, collectionGroup, getDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
@@ -11,8 +17,13 @@ setLogLevel('error');
 
 // --- CONFIGURACIN DE SEGURIDAD ---
 // Lista de User IDs de administradores autorizados para ver el panel.
-const ADMIN_UIDS_PLACEHOLDER = "R3QU4xRLmSQFiArCWWRwGBMEOhc2,R3QU4xRLmSQFiArCWWRwGBMEOhc2,71YiNOk9MOc6mNjxnnKBLST1Clh2";
-const ADMIN_UIDS = ADMIN_UIDS_PLACEHOLDER.split(',').filter(uid => uid.trim() !== '');
+const ADMIN_UIDS = [
+    'R3QU4xRLmSQFiArCWWRwGBMEOhc2',
+    '71YiNOk9MOc6mNjxnnKBLST1Clh2',
+];
+
+const PASSWORD_RESET_URL = 'https://myremesas-prod-deploy.vercel.app/';
+const CREATE_ORDER_API_URL = 'https://us-central1-studio-7601782447-44d81.cloudfunctions.net/createOrder';
 
 // Variables Globales de Firebase (provistas por el entorno)
 const appId = "1:775892034675:web:98ed2724bcaff2ed427606";
@@ -46,7 +57,7 @@ let marginConfig = { ...DEFAULT_MARGIN_CONFIG };
 let marginConfigUnsubscribe = null;
 
 // --- DECLARACIN DE VARIABLES DEL DOM ---
-let userIdDisplay, userIdContainer, authStatus, amountSendInput, currencySendSelect, currencyReceiveSelect, swapButton, amountReceiveDisplay, rateDisplay, suggestedRateDisplay, paymentButton, errorMessage, historyContainer, loadingHistory, adminPanel, rateFetchStatus, rateLastUpdated, ticketLiveStatus, savedAccountsList, accountCount, wldUsdtDisplay, usdtClpP2pWldDisplay, clpUsdtP2pDisplay, vesUsdtP2pDisplay, usdtClpMarginDisplay, adminBankNameInput, adminAccountHolderInput, adminAccountNumberInput, adminRutInput, adminAccountTypeInput, adminEmailInput, saveAccountsButton, accountStatus, paymentModal, closeModalButton, modalAmountSend, modalAmountReceive, noAccountsMessage, modalCryptoWarning, modalTransferCurrency, adminToggleContainer, marginWldClpInput, marginClpVesInput, marginUsdtClpInput, saveMarginsButton, marginStatus, marginWldClpLabel, marginClpVesLabel, marginUsdtClpLabel, receiptUploadInput, uploadReceiptButton, receiptUploadStatus, adminTransactionsSection, adminPendingTransactionsList, adminCompletedTransactionsList, adminOrdersStatus, adminLoadMoreButton, usdtDestinationForm, usdtWalletInput, usdtNetworkSelect, usdtNotesInput, vesDestinationForm, vesBeneficiaryInput, vesIdInput, vesBankInput, vesAccountTypeInput, vesAccountNumberInput, vesNotesInput, imageViewerModal, closeImageViewerButton, imageViewerImg, imageViewerTitle, orderCreationSection, adminAccountSelect, selectedAdminAccountDetails, binanceBalanceCard, usdtBalanceDisplay, refreshUsdtBalanceButton, usdtBalanceStatus, menuToggleButton, appNavMenu, menuBackdrop, menuCloseButton, menuUserEmail, menuLogoutButton, historySection, amountLoadingIndicator;
+let userIdDisplay, userIdContainer, authStatus, amountSendInput, currencySendSelect, currencyReceiveSelect, swapButton, amountReceiveDisplay, rateDisplay, suggestedRateDisplay, paymentButton, errorMessage, historyContainer, loadingHistory, adminPanel, rateFetchStatus, rateLastUpdated, ticketLiveStatus, savedAccountsList, accountCount, wldUsdtDisplay, usdtClpP2pWldDisplay, clpUsdtP2pDisplay, vesUsdtP2pDisplay, usdtClpMarginDisplay, adminBankNameInput, adminAccountHolderInput, adminAccountNumberInput, adminRutInput, adminAccountTypeInput, adminEmailInput, saveAccountsButton, accountStatus, paymentModal, closeModalButton, modalAmountSend, modalAmountReceive, noAccountsMessage, modalCryptoWarning, modalTransferCurrency, adminToggleContainer, marginWldClpInput, marginClpVesInput, marginUsdtClpInput, saveMarginsButton, marginStatus, marginWldClpLabel, marginClpVesLabel, marginUsdtClpLabel, receiptUploadInput, uploadReceiptButton, receiptUploadStatus, adminTransactionsSection, adminPendingTransactionsList, adminCompletedTransactionsList, adminOrdersStatus, adminLoadMoreButton, usdtDestinationForm, usdtWalletInput, usdtNetworkSelect, usdtNotesInput, vesDestinationForm, vesBeneficiaryInput, vesIdInput, vesBankInput, vesAccountTypeInput, vesAccountNumberInput, vesNotesInput, imageViewerModal, closeImageViewerButton, imageViewerImg, imageViewerTitle, orderCreationSection, adminAccountSelect, selectedAdminAccountDetails, binanceBalanceCard, usdtBalanceDisplay, refreshUsdtBalanceButton, usdtBalanceStatus, menuToggleButton, appNavMenu, menuBackdrop, menuCloseButton, menuUserEmail, menuLogoutButton, historySection, amountLoadingIndicator, historyLoadMoreButton;
 
 let currentTransactionId = null;
 let currentTransactionPath = null;
@@ -56,8 +67,8 @@ let isCurrentUserAdmin = false;
 let adminTransactionsUnsubscribe = null;
 let transactionListenerUnsubscribe = null;
 let adminAccountsUnsubscribe = null;
-let authContainer, appContainer, authFormsSection, registerForm, loginForm, logoutButton, showRegisterButton, showLoginButton;
-let registerStatus, loginStatus;
+let authContainer, appContainer, authFormsSection, registerForm, loginForm, resetPasswordForm, logoutButton, showRegisterButton, showLoginButton, showResetPasswordButton, showLoginFromResetButton;
+let registerStatus, loginStatus, resetPasswordStatus;
 let usdtDestinationSaveTimeout = null;
 let vesDestinationSaveTimeout = null;
 let ratesFetchDebounceTimeout = null;
@@ -68,15 +79,27 @@ let hasLoadedAdminOrders = false;
 let hasLoadedAdminConfigRealtime = false;
 let adminTransactionsCursor = null;
 let adminTransactionsHasMore = false;
+let userTransactionsCursor = null;
+let userTransactionsHasMore = false;
+let userTransactionsCache = [];
 const ADMIN_TRANSACTIONS_PAGE_SIZE = 20;
+const USER_TRANSACTIONS_PAGE_SIZE = 20;
 const LIVE_RATES_CACHE_KEY = 'myremesas-live-rates-cache';
+const CLIENT_RATES_MIN_REFRESH_MS = 30_000;
 let lastLiveRatesAt = null;
+let lastLiveRatesWereFallback = true;
+let lastFocusedElement = null;
 /**
  * Redondea un número con el número especificado de decimales (redondeo matemático estándar)
  * @param {number} value - Valor a redondear
  * @param {number} decimals - Número de decimales (default: 2)
  * @returns {number} Valor redondeado
  */
+function isPositiveFiniteNumber(value) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0;
+}
+
 function roundToDecimals(value, decimals = 2) {
     const multiplier = Math.pow(10, decimals);
     return Math.round(value * multiplier) / multiplier;
@@ -190,11 +213,15 @@ function initializeDOM() {
     authFormsSection = document.getElementById('auth-forms');
     registerForm = document.getElementById('register-form');
     loginForm = document.getElementById('login-form');
+    resetPasswordForm = document.getElementById('reset-password-form');
     logoutButton = document.getElementById('logout-button');
     registerStatus = document.getElementById('register-status');
     loginStatus = document.getElementById('login-status');
+    resetPasswordStatus = document.getElementById('reset-password-status');
     showRegisterButton = document.getElementById('show-register-form');
     showLoginButton = document.getElementById('show-login-form');
+    showResetPasswordButton = document.getElementById('show-reset-password-form');
+    showLoginFromResetButton = document.getElementById('show-login-from-reset');
     imageViewerModal = document.getElementById('image-viewer-modal');
     closeImageViewerButton = document.getElementById('close-image-viewer-button');
     imageViewerImg = document.getElementById('image-viewer-img');
@@ -208,6 +235,7 @@ function initializeDOM() {
     menuLogoutButton = document.getElementById('menu-logout-button');
     historySection = document.getElementById('history-section');
     amountLoadingIndicator = document.getElementById('amount-loading-indicator');
+    historyLoadMoreButton = document.getElementById('history-load-more-button');
 }
 
 async function initializeFirebase() {
@@ -275,7 +303,10 @@ async function initializeFirebase() {
                 if (menuUserEmail) menuUserEmail.textContent = 'No autenticado';
                 if(authStatus) authStatus.textContent = "Por favor, inicie sesión o regístrese.";
                 if(userIdContainer) userIdContainer.classList.add('hidden');
-                if(authFormsSection) authFormsSection.classList.remove('hidden');
+                if (authFormsSection) authFormsSection.classList.remove('hidden');
+                if (loginForm) loginForm.classList.remove('hidden');
+                if (registerForm) registerForm.classList.add('hidden');
+                if (resetPasswordForm) resetPasswordForm.classList.add('hidden');
                 if(logoutButton) logoutButton.classList.add('hidden');
                 if (adminPanel) adminPanel.classList.add('hidden');
                 if (adminToggleContainer) adminToggleContainer.classList.add('hidden');
@@ -308,62 +339,134 @@ async function initializeFirebase() {
     }
 }
 
+const AUTH_ERROR_MESSAGES = Object.freeze({
+    'auth/email-already-in-use': 'Ya existe una cuenta con ese correo.',
+    'auth/invalid-credential': 'El correo o la contraseña son incorrectos.',
+    'auth/invalid-email': 'Ingresa un correo electrónico válido.',
+    'auth/missing-password': 'Ingresa tu contraseña.',
+    'auth/operation-not-allowed': 'El acceso con correo y contraseña no está habilitado en Firebase.',
+    'auth/too-many-requests': 'Demasiados intentos. Espera unos minutos e intenta nuevamente.',
+    'auth/user-disabled': 'Esta cuenta está deshabilitada.',
+    'auth/user-not-found': 'El correo o la contraseña son incorrectos.',
+    'auth/weak-password': 'La contraseña debe tener al menos 6 caracteres.',
+});
+
+function getAuthErrorMessage(error) {
+    return AUTH_ERROR_MESSAGES[error?.code] || 'No se pudo completar la operación. Intenta nuevamente.';
+}
+
+function setAuthFormBusy(form, isBusy, busyLabel = 'Procesando...') {
+    const submitButton = form?.querySelector('button[type="submit"]');
+    if (!submitButton) return;
+    if (isBusy) {
+        submitButton.dataset.originalLabel = submitButton.textContent;
+        submitButton.textContent = busyLabel;
+    } else {
+        submitButton.textContent = submitButton.dataset.originalLabel || submitButton.textContent;
+    }
+    submitButton.disabled = isBusy;
+}
+
 function setupAuthEventListeners() {
-    if (loginForm) {
-        loginForm.querySelector('form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('login-email').value;
+    const loginFormElement = loginForm?.querySelector('form');
+    if (loginFormElement) {
+        loginFormElement.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const email = document.getElementById('login-email').value.trim();
             const password = document.getElementById('login-password').value;
-            const statusElement = document.getElementById('login-status');
             try {
-                statusElement.classList.add('hidden');
+                loginStatus.classList.add('hidden');
+                setAuthFormBusy(loginFormElement, true, 'Entrando...');
                 await signInWithEmailAndPassword(auth, email, password);
             } catch (error) {
-                console.error("Error de inicio de sesión:", error);
-                statusElement.textContent = `Error: ${error.message.replace("Firebase: ", "")}`;
-                statusElement.classList.remove('hidden');
+                console.error('Error de inicio de sesión:', error);
+                loginStatus.textContent = getAuthErrorMessage(error);
+                loginStatus.classList.remove('hidden');
+            } finally {
+                setAuthFormBusy(loginFormElement, false);
             }
         });
     }
-    if (registerForm) {
-        registerForm.querySelector('form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('register-email').value;
+
+    const registerFormElement = registerForm?.querySelector('form');
+    if (registerFormElement) {
+        registerFormElement.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const email = document.getElementById('register-email').value.trim();
             const password = document.getElementById('register-password').value;
             const confirmPassword = document.getElementById('register-password-confirm').value;
-            const statusElement = document.getElementById('register-status');
             if (password !== confirmPassword) {
-                statusElement.textContent = "Las contraseñas no coinciden.";
-                statusElement.classList.remove('hidden');
+                registerStatus.textContent = 'Las contraseñas no coinciden.';
+                registerStatus.classList.remove('hidden');
                 return;
             }
             try {
-                statusElement.classList.add('hidden');
+                registerStatus.classList.add('hidden');
+                setAuthFormBusy(registerFormElement, true, 'Creando cuenta...');
                 await createUserWithEmailAndPassword(auth, email, password);
             } catch (error) {
-                console.error("Error de registro:", error);
-                statusElement.textContent = `Error: ${error.message.replace("Firebase: ", "")}`;
-                statusElement.classList.remove('hidden');
+                console.error('Error de registro:', error);
+                registerStatus.textContent = getAuthErrorMessage(error);
+                registerStatus.classList.remove('hidden');
+            } finally {
+                setAuthFormBusy(registerFormElement, false);
             }
         });
     }
-    if (showRegisterButton) {
-        showRegisterButton.addEventListener('click', () => {
-            if (loginForm) loginForm.classList.add('hidden');
-            if (registerForm) registerForm.classList.remove('hidden');
+
+    const resetFormElement = resetPasswordForm?.querySelector('form');
+    if (resetFormElement) {
+        resetFormElement.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const email = document.getElementById('reset-password-email').value.trim();
+            try {
+                resetPasswordStatus.textContent = '';
+                resetPasswordStatus.className = 'auth-status-error text-slate-300 hidden';
+                setAuthFormBusy(resetFormElement, true, 'Enviando...');
+                await sendPasswordResetEmail(auth, email, {
+                    url: PASSWORD_RESET_URL,
+                    handleCodeInApp: false,
+                });
+                resetPasswordStatus.textContent = 'Si el correo existe, recibirás un enlace para restablecer tu contraseña.';
+                resetPasswordStatus.className = 'auth-status-error text-emerald-300';
+            } catch (error) {
+                console.error('Error al restablecer contraseña:', error);
+                resetPasswordStatus.textContent = getAuthErrorMessage(error);
+                resetPasswordStatus.className = 'auth-status-error text-red-400';
+            } finally {
+                setAuthFormBusy(resetFormElement, false);
+            }
         });
     }
-    if (showLoginButton) {
-        showLoginButton.addEventListener('click', () => {
-            if (registerForm) registerForm.classList.add('hidden');
-            if (loginForm) loginForm.classList.remove('hidden');
-        });
-    }
-    if (logoutButton) {
-        logoutButton.addEventListener('click', async () => {
+
+    showRegisterButton?.addEventListener('click', () => {
+        loginForm?.classList.add('hidden');
+        resetPasswordForm?.classList.add('hidden');
+        registerForm?.classList.remove('hidden');
+    });
+
+    const showLogin = () => {
+        registerForm?.classList.add('hidden');
+        resetPasswordForm?.classList.add('hidden');
+        loginForm?.classList.remove('hidden');
+    };
+    showLoginButton?.addEventListener('click', showLogin);
+    showLoginFromResetButton?.addEventListener('click', showLogin);
+    showResetPasswordButton?.addEventListener('click', () => {
+        loginForm?.classList.add('hidden');
+        registerForm?.classList.add('hidden');
+        resetPasswordForm?.classList.remove('hidden');
+        document.getElementById('reset-password-email')?.focus();
+    });
+
+    logoutButton?.addEventListener('click', async () => {
+        try {
             await signOut(auth);
-        });
-    }
+        } catch (error) {
+            console.error('Error al cerrar sesión:', error);
+            showToast('No se pudo cerrar la sesión. Intenta nuevamente.', 'error');
+        }
+    });
 }
 
 function formatCurrency(value, currencyCode) {
@@ -421,10 +524,9 @@ function buildAccountDetailsMarkup(account) {
     if (account.email && account.email !== 'N/A') {
         details.push({ label: 'Email', value: account.email });
     }
-    const copyText = details.map(d => `${d.label}: ${d.value}`).join('\n');
-    const sanitizedCopyText = copyText.replace(/"/g, '&quot;').replace(/\n/g, '&#10;');
+    const sanitizedCopyText = sanitizeCopyText(details);
     const detailsHtml = details.map(d =>
-        `<p class="leading-tight"><span class="font-semibold text-slate-500">${d.label}:</span> <span class="font-semibold text-slate-900">${d.value}</span></p>`
+        `<p class="leading-tight"><span class="font-semibold text-slate-500">${escapeHtml(d.label)}:</span> <span class="font-semibold text-slate-900">${escapeHtml(d.value)}</span></p>`
     ).join('');
     return `
         <div class="relative">
@@ -533,12 +635,78 @@ function isImageLikeUrl(url) {
     }
 }
 
+const FOCUSABLE_SELECTOR = [
+    'button:not([disabled])',
+    '[href]',
+    'input:not([disabled])',
+    'select:not([disabled])',
+    'textarea:not([disabled])',
+    '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+function getFocusableElements(container) {
+    return [...(container?.querySelectorAll(FOCUSABLE_SELECTOR) || [])]
+        .filter(element => element.offsetParent !== null);
+}
+
+function openModalElement(modal, initialFocusElement = null) {
+    if (!modal) return;
+    lastFocusedElement = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(() => {
+        const focusTarget = initialFocusElement || getFocusableElements(modal)[0];
+        focusTarget?.focus();
+    });
+}
+
+function closeModalElement(modal) {
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+    lastFocusedElement?.focus?.();
+}
+
+function keepFocusInsideModal(event, modal) {
+    if (event.key !== 'Tab' || !modal || modal.classList.contains('hidden')) return;
+    const focusable = getFocusableElements(modal);
+    if (!focusable.length) {
+        event.preventDefault();
+        modal.focus();
+        return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+    }
+}
+
+function isTrustedReceiptUrl(url) {
+    try {
+        const parsed = new URL(url, window.location.href);
+        return parsed.protocol === 'https:' && parsed.hostname === 'firebasestorage.googleapis.com';
+    } catch (error) {
+        return false;
+    }
+}
+
 function openReceiptViewer(url, title = 'Comprobante') {
     if (!url) return;
+    if (!isTrustedReceiptUrl(url)) {
+        showToast('El enlace del comprobante no es válido.', 'error');
+        return;
+    }
     if (isImageLikeUrl(url) && imageViewerModal && imageViewerImg && imageViewerTitle) {
         imageViewerImg.src = url;
         imageViewerTitle.textContent = title;
-        imageViewerModal.classList.remove('hidden');
+        openModalElement(imageViewerModal, closeImageViewerButton);
     } else {
         window.open(url, '_blank', 'noopener,noreferrer');
     }
@@ -546,7 +714,7 @@ function openReceiptViewer(url, title = 'Comprobante') {
 
 function closeReceiptViewer() {
     if (!imageViewerModal) return;
-    imageViewerModal.classList.add('hidden');
+    closeModalElement(imageViewerModal);
     if (imageViewerImg) imageViewerImg.src = '';
 }
 
@@ -562,8 +730,24 @@ function handleViewReceiptButton(button) {
 }
 
 function getMarginValue(key) {
-    const value = marginConfig[key];
-    return (typeof value === 'number' && !Number.isNaN(value)) ? value : DEFAULT_MARGIN_CONFIG[key];
+    const value = Number(marginConfig[key]);
+    return Number.isFinite(value) && value >= 0 && value <= 1
+        ? value
+        : DEFAULT_MARGIN_CONFIG[key];
+}
+
+function normalizeMarginConfig(data = {}) {
+    const normalize = (value, fallback) => {
+        const numeric = Number(value);
+        return Number.isFinite(numeric) && numeric >= 0 && numeric <= 1
+            ? numeric
+            : fallback;
+    };
+    return {
+        discountWldClp: normalize(data.discountWldClp, DEFAULT_MARGIN_CONFIG.discountWldClp),
+        discountClpVes: normalize(data.discountClpVes, DEFAULT_MARGIN_CONFIG.discountClpVes),
+        marginUsdtClp: normalize(data.marginUsdtClp, DEFAULT_MARGIN_CONFIG.marginUsdtClp),
+    };
 }
 
 function formatPercent(value) {
@@ -616,6 +800,10 @@ function clearRealtimeListeners() {
     }
     adminTransactionsCursor = null;
     adminTransactionsHasMore = false;
+    userTransactionsCursor = null;
+    userTransactionsHasMore = false;
+    userTransactionsCache = [];
+    if (historyLoadMoreButton) historyLoadMoreButton.classList.add('hidden');
 }
 
 function setAmountLoadingState(isLoading) {
@@ -667,6 +855,7 @@ function closeDataListenersForInactiveViews() {
         transactionListenerUnsubscribe();
         transactionListenerUnsubscribe = null;
     }
+    if (activeView !== 'history' && historyLoadMoreButton) historyLoadMoreButton.classList.add('hidden');
     if (activeView !== 'admin-orders' && adminTransactionsUnsubscribe) {
         adminTransactionsUnsubscribe();
         adminTransactionsUnsubscribe = null;
@@ -703,7 +892,11 @@ function setTicketLiveStatus(message) {
 
 function saveLiveRatesCache() {
     try {
-        localStorage.setItem(LIVE_RATES_CACHE_KEY, JSON.stringify({ liveRates, lastLiveRatesAt }));
+        localStorage.setItem(LIVE_RATES_CACHE_KEY, JSON.stringify({
+            liveRates,
+            lastLiveRatesAt,
+            lastLiveRatesWereFallback,
+        }));
     } catch (error) {
         console.warn('No se pudo guardar la caché local de tasas:', error);
     }
@@ -715,12 +908,15 @@ function loadLiveRatesCache() {
         if (!raw) return;
         const parsed = JSON.parse(raw);
         if (parsed?.liveRates) {
-            if (Number.isFinite(Number(parsed.liveRates.WLD_to_USDT))) liveRates.WLD_to_USDT = Number(parsed.liveRates.WLD_to_USDT);
-            if (Number.isFinite(Number(parsed.liveRates.USDT_to_CLP))) liveRates.USDT_to_CLP = Number(parsed.liveRates.USDT_to_CLP);
-            if (Number.isFinite(Number(parsed.liveRates.USDT_to_VES))) liveRates.USDT_to_VES = Number(parsed.liveRates.USDT_to_VES);
+            if (isPositiveFiniteNumber(parsed.liveRates.WLD_to_USDT)) liveRates.WLD_to_USDT = Number(parsed.liveRates.WLD_to_USDT);
+            if (isPositiveFiniteNumber(parsed.liveRates.USDT_to_CLP)) liveRates.USDT_to_CLP = Number(parsed.liveRates.USDT_to_CLP);
+            if (isPositiveFiniteNumber(parsed.liveRates.USDT_to_VES)) liveRates.USDT_to_VES = Number(parsed.liveRates.USDT_to_VES);
         }
         if (parsed?.lastLiveRatesAt) {
             lastLiveRatesAt = parsed.lastLiveRatesAt;
+        }
+        if (typeof parsed?.lastLiveRatesWereFallback === 'boolean') {
+            lastLiveRatesWereFallback = parsed.lastLiveRatesWereFallback;
         }
     } catch (error) {
         console.warn('No se pudo leer la caché local de tasas:', error);
@@ -794,12 +990,7 @@ async function loadMarginConfigOnce() {
         const configDocRef = doc(db, MARGIN_CONFIG_COLLECTION, MARGIN_CONFIG_DOC_ID);
         const snapshot = await getDoc(configDocRef);
         if (snapshot.exists()) {
-            const data = snapshot.data();
-            marginConfig = {
-                discountWldClp: data.discountWldClp ?? DEFAULT_MARGIN_CONFIG.discountWldClp,
-                discountClpVes: data.discountClpVes ?? DEFAULT_MARGIN_CONFIG.discountClpVes,
-                marginUsdtClp: data.marginUsdtClp ?? DEFAULT_MARGIN_CONFIG.marginUsdtClp,
-            };
+            marginConfig = normalizeMarginConfig(snapshot.data());
         } else {
             marginConfig = { ...DEFAULT_MARGIN_CONFIG };
         }
@@ -813,7 +1004,7 @@ async function loadMarginConfigOnce() {
 
 function applyAdminAccountsSnapshot(snapshot) {
     adminAccounts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    adminAccounts.sort((a, b) => a.bankName.localeCompare(b.bankName));
+    adminAccounts.sort((a, b) => String(a.bankName || '').localeCompare(String(b.bankName || '')));
     renderAdminAccountsList();
     if (accountCount) accountCount.textContent = adminAccounts.length;
 }
@@ -865,6 +1056,18 @@ function getDraftVesDestination() {
         notes: vesNotesInput?.value.trim() || '',
     };
     return Object.values(payload).some(Boolean) ? payload : null;
+}
+
+function getCurrentTransactionValidationError() {
+    if (!currentTransactionDraft) return 'Primero prepara una orden.';
+    return getTransactionDestinationValidationError({
+        amountSend: currentTransactionDraft.amountSend,
+        currencySend: currentTransactionDraft.currencySend,
+        currencyReceive: currentTransactionDraft.currencyReceive,
+        hasAdminDestination: Boolean(adminAccountSelect?.value),
+        usdtDestination: getDraftUsdtDestination(),
+        vesDestination: getDraftVesDestination(),
+    });
 }
 
 function syncCurrentTransactionDraftFromUI() {
@@ -919,12 +1122,7 @@ function setupMarginConfigListener() {
     const configDocRef = doc(db, MARGIN_CONFIG_COLLECTION, MARGIN_CONFIG_DOC_ID);
     marginConfigUnsubscribe = onSnapshot(configDocRef, (snapshot) => {
         if (snapshot.exists()) {
-            const data = snapshot.data();
-            marginConfig = {
-                discountWldClp: data.discountWldClp ?? DEFAULT_MARGIN_CONFIG.discountWldClp,
-                discountClpVes: data.discountClpVes ?? DEFAULT_MARGIN_CONFIG.discountClpVes,
-                marginUsdtClp: data.marginUsdtClp ?? DEFAULT_MARGIN_CONFIG.marginUsdtClp,
-            };
+            marginConfig = normalizeMarginConfig(snapshot.data());
         } else {
             marginConfig = { ...DEFAULT_MARGIN_CONFIG };
         }
@@ -1079,46 +1277,52 @@ async function fetchDynamicRates() {
     setAmountLoadingState(true);
     setTicketLiveStatus('Consultando mercado');
     if (rateFetchStatus) rateFetchStatus.textContent = 'Conectando con API...';
+    const abortController = new AbortController();
+    const timeoutId = window.setTimeout(() => abortController.abort(), 20_000);
     try {
-        const response = await fetch('/api/rates?_v=' + Date.now());
+        const response = await fetch('/api/rates', {
+            signal: abortController.signal,
+        });
         if (!response.ok) throw new Error(`Respuesta de la API no fue exitosa: ${response.status}`);
         const data = await response.json();
 
-        if (data?.success) {
-            const newClpRate = parseFloat(data.USDT_to_CLP_P2P);
-            if (!isNaN(newClpRate)) liveRates.USDT_to_CLP = newClpRate;
+        if (!data?.success) {
+            throw new Error(data?.message || 'Respuesta de la API con formato inesperado.');
+        }
 
-            const newVesRate = parseFloat(data.VES_to_USDT_P2P);
-            if (!isNaN(newVesRate)) liveRates.USDT_to_VES = newVesRate;
+        if (isPositiveFiniteNumber(data.USDT_to_CLP_P2P)) liveRates.USDT_to_CLP = Number(data.USDT_to_CLP_P2P);
+        if (isPositiveFiniteNumber(data.VES_to_USDT_P2P)) liveRates.USDT_to_VES = Number(data.VES_to_USDT_P2P);
+        if (isPositiveFiniteNumber(data.WLD_to_USDT)) liveRates.WLD_to_USDT = Number(data.WLD_to_USDT);
 
-            const newWldRate = parseFloat(data.WLD_to_USDT);
-            if (!isNaN(newWldRate)) liveRates.WLD_to_USDT = newWldRate;
+        lastLiveRatesAt = new Date().toISOString();
+        lastLiveRatesWereFallback = Boolean(data.degraded);
+        saveLiveRatesCache();
+        updateLiveRatesTimestampLabel();
 
-            lastLiveRatesAt = new Date().toISOString();
-            saveLiveRatesCache();
-            updateLiveRatesTimestampLabel();
-
-            renderRateDisplays({
-                wldSource: data.meta?.wld_source || 'API',
-                clpSource: data.meta?.clp_source || 'API',
-                vesSource: data.meta?.ves_source || 'API',
-            });
-            setTicketLiveStatus('Mercado actualizado');
-            if (rateFetchStatus) rateFetchStatus.textContent = 'Tasas actualizadas.';
-
-        } else {
-            throw new Error(data.message || "Respuesta de la API con formato inesperado.");
+        renderRateDisplays({
+            wldSource: data.meta?.wld_source || 'API',
+            clpSource: data.meta?.clp_source || 'API',
+            vesSource: data.meta?.ves_source || 'API',
+            suffix: data.degraded ? ' (Referencia)' : '',
+        });
+        setTicketLiveStatus(data.degraded ? 'Usando referencia de respaldo' : 'Mercado actualizado');
+        if (rateFetchStatus) {
+            rateFetchStatus.textContent = data.degraded
+                ? 'Mercado con respaldo: algunas tasas usan valores de referencia.'
+                : 'Tasas actualizadas.';
         }
     } catch (error) {
-        console.warn("Fallo en la conexión con la API. Usando tasas de referencia fijas.", error);
+        console.warn('Fallo en la conexión con la API. Usando tasas de referencia fijas.', error);
+        lastLiveRatesWereFallback = true;
         renderRateDisplays({ suffix: ' (Fijo)' });
         setTicketLiveStatus('Usando referencia fija');
-        rateFetchStatus.textContent = 'Fallo de conexión. Usando tasas de Referencia.';
+        if (rateFetchStatus) rateFetchStatus.textContent = 'No se pudo actualizar el mercado. Se conserva la última referencia disponible.';
     } finally {
+        window.clearTimeout(timeoutId);
         isFetchingDynamicRates = false;
         setAmountLoadingState(false);
+        calculateExchange();
     }
-    calculateExchange();
 }
 
 function scheduleDynamicRatesFetch() {
@@ -1139,6 +1343,17 @@ function scheduleDynamicRatesFetch() {
         return;
     }
 
+    const lastRatesTimestamp = Date.parse(lastLiveRatesAt || '');
+    const hasRecentLiveRates = !lastLiveRatesWereFallback
+        && Number.isFinite(lastRatesTimestamp)
+        && (Date.now() - lastRatesTimestamp) < CLIENT_RATES_MIN_REFRESH_MS;
+    if (hasRecentLiveRates) {
+        setAmountLoadingState(false);
+        setTicketLiveStatus('Mercado actualizado recientemente');
+        if (rateFetchStatus) rateFetchStatus.textContent = 'Tasas recientes reutilizadas; se actualizarán automáticamente en menos de 30 segundos.';
+        return;
+    }
+
     setAmountLoadingState(true);
     if (rateFetchStatus) {
         rateFetchStatus.textContent = 'Consultando tasas en vivo...';
@@ -1155,13 +1370,19 @@ function calculateFullRatesInternal() {
     const { discountWldClp, discountClpVes, marginUsdtClp } = marginConfig;
     if (WLD_to_USDT && USDT_to_CLP) {
         const baseWldToClp = WLD_to_USDT * USDT_to_CLP;
-        fullRates['WLD_to_CLP'] = baseWldToClp * (1 - discountWldClp);
-        fullRates['CLP_to_WLD'] = 1 / fullRates['WLD_to_CLP'];
+        const adjustedWldToClp = baseWldToClp * (1 - discountWldClp);
+        if (adjustedWldToClp > 0) {
+            fullRates['WLD_to_CLP'] = adjustedWldToClp;
+            fullRates['CLP_to_WLD'] = 1 / adjustedWldToClp;
+        }
     }
     if (USDT_to_CLP && USDT_to_VES) {
         const baseClpToVesRate = USDT_to_VES / USDT_to_CLP;
-        fullRates['CLP_to_VES'] = baseClpToVesRate * (1 - discountClpVes);
-        fullRates['VES_to_CLP'] = 1 / fullRates['CLP_to_VES'];
+        const adjustedClpToVesRate = baseClpToVesRate * (1 - discountClpVes);
+        if (adjustedClpToVesRate > 0) {
+            fullRates['CLP_to_VES'] = adjustedClpToVesRate;
+            fullRates['VES_to_CLP'] = 1 / adjustedClpToVesRate;
+        }
     }
     if (USDT_to_CLP) {
         const finalUsdtToClp = USDT_to_CLP * (1 + marginUsdtClp);
@@ -1200,7 +1421,7 @@ function calculateExchange(enablePaymentButton = true) {
     if (isNaN(amountSend) || amountSend <= 0) {
         amountReceiveDisplay.textContent = formatCurrency(0, currencyReceive);
         fitAmountDisplay();
-        rateDisplay.textContent = "Ingrese un monto vélido.";
+        rateDisplay.textContent = "Ingrese un monto válido.";
         if (suggestedRateDisplay) suggestedRateDisplay.textContent = '';
         paymentButton.disabled = true;
         errorMessage.classList.add('hidden');
@@ -1245,49 +1466,127 @@ function swapCurrencies() {
 }
 
 async function recordTransaction(amountSend, currencySend, amountReceive, currencyReceive, extraData = {}) {
-    if (!isAuthReady || !db || !userId) {
-        console.error('Error: Firebase no listo para registrar.');
-        return null;
+    if (!isAuthReady || !db || !userId || !auth?.currentUser) {
+        throw new Error('Firebase no está listo para crear la orden.');
     }
-    const transactionData = {
-        amountSend: Number.isFinite(amountSend) ? amountSend : 0,
+
+    const idToken = await auth.currentUser.getIdToken();
+    const payload = {
+        amountSend,
         currencySend,
-        amountReceive,
         currencyReceive,
-        rateApplied: amountSend > 0 ? amountReceive / amountSend : null,
-        timestamp: serverTimestamp(),
-        userId,
-        status: 'Sin comprobante',
-        userReceiptUrl: null,
-        adminReceiptUrl: null,
-        ...extraData
     };
-    try {
-        const userTransactionsRef = collection(db, 'artifacts', appId, 'users', userId, 'transactions');
-        const docRef = await addDoc(userTransactionsRef, transactionData);
-        const pathSegments = ['artifacts', appId, 'users', userId, 'transactions', docRef.id];
-        return { id: docRef.id, path: pathSegments.join('/'), ref: docRef, segments: pathSegments };
-    } catch (error) {
-        console.error('Error al registrar transacción:', error);
-        return null;
+    if (extraData.adminDestinationAccount?.id) {
+        payload.adminDestinationAccountId = extraData.adminDestinationAccount.id;
     }
+    if (extraData.userUsdtDestination) payload.userUsdtDestination = extraData.userUsdtDestination;
+    if (extraData.userVesDestination) payload.userVesDestination = extraData.userVesDestination;
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 30_000);
+    let response;
+    try {
+        response = await fetch(CREATE_ORDER_API_URL, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${idToken}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+        });
+    } catch (error) {
+        if (error?.name === 'AbortError') throw new Error('La validación de la tasa tardó demasiado. Intenta nuevamente.');
+        throw error;
+    } finally {
+        window.clearTimeout(timeoutId);
+    }
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.success || !result.id || !result.path) {
+        if (response.status === 503) throw new Error('No se pudo validar la tasa en este momento. Intenta nuevamente.');
+        throw new Error(result.message || 'No se pudo crear la orden.');
+    }
+
+    const pathSegments = result.path.split('/').filter(Boolean);
+    if (pathSegments.length !== 6) throw new Error('La orden creada tiene una ruta inválida.');
+    const transactionRef = doc(db, ...pathSegments);
+    return {
+        id: result.id,
+        path: result.path,
+        ref: transactionRef,
+        segments: pathSegments,
+        amountReceive: result.amountReceive,
+        rateApplied: result.rateApplied,
+        rateSource: result.rateSource,
+        ratesDegraded: result.ratesDegraded,
+    };
+}
+
+function sortTransactions(transactions) {
+    return [...transactions].sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+}
+
+function mergeUserTransactions(existing, incoming) {
+    const byId = new Map();
+    [...existing, ...incoming].forEach((transaction) => byId.set(transaction.id, transaction));
+    return sortTransactions([...byId.values()]);
+}
+
+function updateHistoryLoadMoreButton() {
+    if (!historyLoadMoreButton) return;
+    historyLoadMoreButton.classList.toggle('hidden', !userTransactionsHasMore || !userTransactionsCursor);
+    historyLoadMoreButton.disabled = false;
 }
 
 function setupTransactionListener() {
     if (!isAuthReady || !db || !userId) return;
     if (transactionListenerUnsubscribe) transactionListenerUnsubscribe();
-    if (loadingHistory) loadingHistory.textContent = 'Cargando historial...';
-    renderSkeletonList(historyContainer, 3);
+    if (!userTransactionsCache.length) {
+        if (loadingHistory) loadingHistory.textContent = 'Cargando historial...';
+        renderSkeletonList(historyContainer, 3);
+    }
     const userTransactionsRef = collection(db, 'artifacts', appId, 'users', userId, 'transactions');
-    const q = query(userTransactionsRef);
+    const q = query(userTransactionsRef, orderBy('timestamp', 'desc'), limit(USER_TRANSACTIONS_PAGE_SIZE));
     transactionListenerUnsubscribe = onSnapshot(q, (snapshot) => {
-        const transactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        transactions.sort((a, b) => b.timestamp?.seconds - a.timestamp?.seconds);
-        renderTransactionHistory(transactions);
+        const firstPage = snapshot.docs.map(document => ({ id: document.id, ...document.data() }));
+        userTransactionsCache = userTransactionsCache.length
+            ? mergeUserTransactions(userTransactionsCache, firstPage)
+            : sortTransactions(firstPage);
+        if (!userTransactionsCursor) {
+            userTransactionsCursor = snapshot.docs[snapshot.docs.length - 1] || null;
+            userTransactionsHasMore = snapshot.size === USER_TRANSACTIONS_PAGE_SIZE;
+        }
+        renderTransactionHistory(userTransactionsCache);
+        updateHistoryLoadMoreButton();
     }, (error) => {
-        console.error("Error al escuchar transacciones:", error);
+        console.error('Error al escuchar transacciones:', error);
         if (historyContainer) historyContainer.innerHTML = '<p class="text-sm text-red-600 p-2">Error al cargar el historial.</p>';
     });
+}
+
+async function loadMoreUserTransactions() {
+    if (!db || !userId || !userTransactionsCursor || !userTransactionsHasMore) return;
+    if (historyLoadMoreButton) historyLoadMoreButton.disabled = true;
+    try {
+        const userTransactionsRef = collection(db, 'artifacts', appId, 'users', userId, 'transactions');
+        const snapshot = await getDocs(query(
+            userTransactionsRef,
+            orderBy('timestamp', 'desc'),
+            startAfter(userTransactionsCursor),
+            limit(USER_TRANSACTIONS_PAGE_SIZE),
+        ));
+        const nextPage = snapshot.docs.map(document => ({ id: document.id, ...document.data() }));
+        userTransactionsCache = mergeUserTransactions(userTransactionsCache, nextPage);
+        userTransactionsCursor = snapshot.docs[snapshot.docs.length - 1] || userTransactionsCursor;
+        userTransactionsHasMore = snapshot.size === USER_TRANSACTIONS_PAGE_SIZE;
+        renderTransactionHistory(userTransactionsCache);
+    } catch (error) {
+        console.error('Error al cargar más transacciones:', error);
+        showToast('No se pudieron cargar las órdenes anteriores.', 'error');
+    } finally {
+        if (historyLoadMoreButton) historyLoadMoreButton.disabled = false;
+        updateHistoryLoadMoreButton();
+    }
 }
 
 function getStatusBadgeClasses(status) {
@@ -1312,7 +1611,7 @@ function canCancelTransaction(status) {
 function renderTransactionHistory(transactions) {
     historyContainer.innerHTML = '';
     if (transactions.length === 0) {
-        historyContainer.innerHTML = '<p class="text-gray-500 text-xs sm:text-sm p-2">Aun no hay transacciones.</p>';
+        historyContainer.innerHTML = '<p class="text-gray-500 text-xs sm:text-sm p-2">Aún no hay transacciones.</p>';
         return;
     }
     transactions.forEach(tx => {
@@ -1366,7 +1665,7 @@ function renderTransactionHistory(transactions) {
     });
 }
 async function cancelUserTransaction(transactionId) {
-    if (!transactionId || !db || !userId) throw new Error('Transacci�n no disponible.');
+    if (!transactionId || !db || !userId) throw new Error('Transacción no disponible.');
     const transactionRef = doc(db, 'artifacts', appId, 'users', userId, 'transactions', transactionId);
     const transactionSnap = await getDoc(transactionRef);
     if (!transactionSnap.exists()) {
@@ -1415,9 +1714,10 @@ async function handleHistoryContainerClick(event) {
             }
             return;
         }
-        if (file.size > 8 * 1024 * 1024) {
+        const fileValidationError = getReceiptFileValidationError(file);
+        if (fileValidationError) {
             if (statusElement) {
-                statusElement.textContent = 'El archivo supera los 8 MB.';
+                statusElement.textContent = fileValidationError;
                 statusElement.className = 'history-upload-status text-xs text-red-600';
                 statusElement.classList.remove('hidden');
             }
@@ -1550,7 +1850,11 @@ async function showPaymentModal() {
         noAccountsMessage.innerHTML = '<p class="text-center text-gray-600 p-4">La dirección de la Wallet será proporcionada por el administrador.</p>';
     }
     syncCurrentTransactionDraftFromUI();
-    paymentModal.classList.remove('hidden');
+    openModalElement(paymentModal, adminAccountSelect?.value ? uploadReceiptButton : adminAccountSelect);
+}
+
+function closePaymentModal() {
+    closeModalElement(paymentModal);
 }
 
 async function handleAdminAccountSelection() {
@@ -1581,14 +1885,22 @@ async function handleUserReceiptUpload(event) {
         receiptUploadStatus.className = 'text-xs text-red-600';
         return;
     }
+    syncCurrentTransactionDraftFromUI();
+    const transactionValidationError = getCurrentTransactionValidationError();
+    if (transactionValidationError) {
+        receiptUploadStatus.textContent = transactionValidationError;
+        receiptUploadStatus.className = 'text-xs text-red-600';
+        return;
+    }
     const file = receiptUploadInput.files?.[0];
     if (!file) {
         receiptUploadStatus.textContent = 'Selecciona un archivo.';
         receiptUploadStatus.className = 'text-xs text-red-600';
         return;
     }
-    if (file.size > 8 * 1024 * 1024) {
-        receiptUploadStatus.textContent = 'El archivo supera los 8 MB.';
+    const fileValidationError = getReceiptFileValidationError(file);
+    if (fileValidationError) {
+        receiptUploadStatus.textContent = fileValidationError;
         receiptUploadStatus.className = 'text-xs text-red-600';
         return;
     }
@@ -1611,8 +1923,9 @@ async function handleUserReceiptUpload(event) {
             currentTransactionId = transactionRecord.id;
             currentTransactionPath = transactionRecord.path;
             currentTransactionRef = transactionRecord.ref;
+            currentTransactionDraft.amountReceive = transactionRecord.amountReceive;
         }
-        const storagePath = `${currentTransactionPath}/receipts/user/${Date.now()}-${file.name}`;
+        const storagePath = `${currentTransactionPath}/receipts/user/${Date.now()}-${sanitizeReceiptFileName(file.name)}`;
         const fileRef = storageRef(storage, storagePath);
         await uploadBytes(fileRef, file);
         const downloadUrl = await getDownloadURL(fileRef);
@@ -1621,7 +1934,7 @@ async function handleUserReceiptUpload(event) {
             status: 'Pendiente',
             userReceiptUploadedAt: serverTimestamp(),
         });
-        receiptUploadStatus.textContent = 'Comprobante subido. Tu orden está pendiente de revisin.';
+        receiptUploadStatus.textContent = 'Comprobante subido. Tu orden está pendiente de revisión.';
         receiptUploadStatus.className = 'text-xs text-green-600';
     } catch (error) {
         console.error('Error al subir comprobante:', error);
@@ -1646,7 +1959,10 @@ async function uploadReceiptFromHistory(transactionId, file) {
     if (transactionData.status === 'Completado') {
         throw new Error('La orden ya fue completada.');
     }
-    const storagePath = `artifacts/${appId}/users/${userId}/transactions/${transactionId}/receipts/user/${Date.now()}-${file.name}`;
+    if (transactionData.status === 'Cancelada') {
+        throw new Error('La orden está cancelada.');
+    }
+    const storagePath = `artifacts/${appId}/users/${userId}/transactions/${transactionId}/receipts/user/${Date.now()}-${sanitizeReceiptFileName(file.name)}`;
     const fileRef = storageRef(storage, storagePath);
     await uploadBytes(fileRef, file);
     const downloadUrl = await getDownloadURL(fileRef);
@@ -1897,7 +2213,7 @@ async function handleAdminTransactionsListClick(event) {
     const hasUserReceipt = card?.getAttribute('data-user-has-receipt') === 'true';
     if (!hasUserReceipt) {
         if (statusElement) {
-            statusElement.textContent = 'El cliente an no ha cargado su comprobante.';
+            statusElement.textContent = 'El cliente aún no ha cargado su comprobante.';
             statusElement.className = 'admin-upload-status text-xs text-red-600';
         }
         return;
@@ -1907,6 +2223,12 @@ async function handleAdminTransactionsListClick(event) {
     if (!file) {
         if (!statusElement) return;
         statusElement.textContent = 'Selecciona un archivo.';
+        statusElement.className = 'admin-upload-status text-xs text-red-600';
+        return;
+    }
+    const fileValidationError = getReceiptFileValidationError(file);
+    if (fileValidationError) {
+        statusElement.textContent = fileValidationError;
         statusElement.className = 'admin-upload-status text-xs text-red-600';
         return;
     }
@@ -1932,16 +2254,16 @@ async function handleAdminTransactionsListClick(event) {
 async function uploadAdminReceipt(transactionPath, file) {
     if (!storage || !db) throw new Error('Firebase no inicializado.');
     const transactionRef = docRefFromAbsolutePath(transactionPath);
-    if (!transactionRef) throw new Error('Ruta de transaccion invalida.');
+    if (!transactionRef) throw new Error('Ruta de transacción inválida.');
     const transactionSnap = await getDoc(transactionRef);
     if (!transactionSnap.exists()) {
         throw new Error('La orden no existe.');
     }
     const transactionData = transactionSnap.data();
     if (!transactionData.userReceiptUrl) {
-        throw new Error('El cliente an no ha cargado su comprobante.');
+        throw new Error('El cliente aún no ha cargado su comprobante.');
     }
-    const storagePath = `${transactionPath}/receipts/admin/${Date.now()}-${file.name}`;
+    const storagePath = `${transactionPath}/receipts/admin/${Date.now()}-${sanitizeReceiptFileName(file.name)}`;
     const fileRef = storageRef(storage, storagePath);
     await uploadBytes(fileRef, file);
     const downloadUrl = await getDownloadURL(fileRef);
@@ -1955,7 +2277,7 @@ async function uploadAdminReceipt(transactionPath, file) {
 async function cancelTransactionAsAdmin(transactionPath) {
     if (!db) throw new Error('Firebase no inicializado.');
     const transactionRef = docRefFromAbsolutePath(transactionPath);
-    if (!transactionRef) throw new Error('Ruta de transaccion invalida.');
+    if (!transactionRef) throw new Error('Ruta de transacción inválida.');
     const transactionSnap = await getDoc(transactionRef);
     if (!transactionSnap.exists()) {
         throw new Error('La orden no existe.');
@@ -2007,22 +2329,25 @@ function showConfirm(message, { title = 'Confirmar acción', acceptText = 'Confi
         const acceptButton = document.getElementById('confirm-accept-button');
         const cancelButton = document.getElementById('confirm-cancel-button');
         if (!modal || !titleElement || !messageElement || !acceptButton || !cancelButton) {
-            resolve(window.confirm(message));
+            console.error('No se pudo abrir el diálogo de confirmación.');
+            resolve(false);
             return;
         }
         titleElement.textContent = title;
         messageElement.textContent = message;
         acceptButton.textContent = acceptText;
-        modal.classList.remove('hidden');
         let settled = false;
         const finish = (result) => {
             if (settled) return;
             settled = true;
-            modal.classList.add('hidden');
+            acceptButton.onclick = null;
+            cancelButton.onclick = null;
+            closeModalElement(modal);
             resolve(result);
         };
         acceptButton.onclick = () => finish(true);
         cancelButton.onclick = () => finish(false);
+        openModalElement(modal, cancelButton);
     });
 }
 
@@ -2191,6 +2516,11 @@ function registerStaticEventListeners() {
     if (currencyReceiveSelect) currencyReceiveSelect.addEventListener('change', () => calculateExchange());
     if (swapButton) swapButton.addEventListener('click', () => { swapCurrencies(); calculateExchange(); });
     if (historyContainer) historyContainer.addEventListener('click', handleHistoryContainerClick);
+    if (historyLoadMoreButton) {
+        historyLoadMoreButton.addEventListener('click', () => {
+            loadMoreUserTransactions().catch(error => console.error('Error al cargar más historial:', error));
+        });
+    }
     if (menuToggleButton) menuToggleButton.addEventListener('click', () => {
         if (!appNavMenu || appNavMenu.classList.contains('hidden')) {
             openAppMenu();
@@ -2203,7 +2533,12 @@ function registerStaticEventListeners() {
     const bottomNavMenuButton = document.getElementById('bottom-nav-menu-button');
     if (bottomNavMenuButton) bottomNavMenuButton.addEventListener('click', openAppMenu);
     const closeModalXButton = document.getElementById('close-modal-x-button');
-    if (closeModalXButton && paymentModal) closeModalXButton.addEventListener('click', () => paymentModal.classList.add('hidden'));
+    if (closeModalXButton && paymentModal) closeModalXButton.addEventListener('click', closePaymentModal);
+    if (paymentModal) {
+        paymentModal.addEventListener('click', (event) => {
+            if (event.target === paymentModal) closePaymentModal();
+        });
+    }
     const confirmModal = document.getElementById('confirm-modal');
     if (confirmModal) confirmModal.addEventListener('click', (event) => {
         if (event.target === confirmModal) {
@@ -2234,7 +2569,7 @@ function registerStaticEventListeners() {
     if (paymentButton) paymentButton.addEventListener('click', showPaymentModal);
     const shareQuoteButton = document.getElementById('share-quote-button');
     if (shareQuoteButton) shareQuoteButton.addEventListener('click', shareQuote);
-    if (closeModalButton) closeModalButton.addEventListener('click', () => paymentModal.classList.add('hidden'));
+    if (closeModalButton) closeModalButton.addEventListener('click', closePaymentModal);
     if (menuLogoutButton) menuLogoutButton.addEventListener('click', async () => {
         await signOut(auth);
     });
@@ -2306,9 +2641,17 @@ async function refreshBinanceBalance() {
     setUsdtBalanceStatus('Consultando saldo...', false);
     if (refreshUsdtBalanceButton) refreshUsdtBalanceButton.disabled = true;
     try {
-        const response = await fetch('/api/binance-balance?asset=USDT&_v=' + Date.now());
+        const currentUser = auth?.currentUser;
+        if (!currentUser) throw new Error('La sesión no está disponible.');
+        const idToken = await currentUser.getIdToken();
+        const response = await fetch('/api/binance-balance?asset=USDT&_v=' + Date.now(), {
+            headers: { Authorization: `Bearer ${idToken}` },
+            cache: 'no-store',
+        });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || !payload.success) {
+            if (response.status === 401) throw new Error('Tu sesión venció. Vuelve a iniciar sesión.');
+            if (response.status === 403) throw new Error('No autorizado para consultar el saldo.');
             throw new Error(payload.message || `HTTP ${response.status}`);
         }
         const balance = payload.balance;
@@ -2341,7 +2684,7 @@ async function refreshBinanceBalance() {
         if (errorMessage.includes('404')) {
             setUsdtBalanceStatus('Endpoint de Binance no disponible. Verifica la configuración en vercel.json y despliega nuevamente.', true);
         } else if (lowerMessage.includes('restricted location')) {
-            setUsdtBalanceStatus('Binance bloque la consulta desde esta ubicacin. Debes habilitar IP permitidas o usar una regin autorizada.', true);
+            setUsdtBalanceStatus('Binance bloque la consulta desde esta ubicación. Debes habilitar IP permitidas o usar una región autorizada.', true);
         } else {
             setUsdtBalanceStatus(errorMessage || 'No se pudo obtener el saldo.', true);
         }
@@ -2379,7 +2722,19 @@ async function bootstrapApp() {
         }
         registerStaticEventListeners();
         document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape') closeReceiptViewer();
+            const confirmModal = document.getElementById('confirm-modal');
+            if (event.key === 'Escape') {
+                if (confirmModal && !confirmModal.classList.contains('hidden')) {
+                    document.getElementById('confirm-cancel-button')?.click();
+                } else if (paymentModal && !paymentModal.classList.contains('hidden')) {
+                    closePaymentModal();
+                } else {
+                    closeReceiptViewer();
+                }
+            }
+            keepFocusInsideModal(event, confirmModal);
+            keepFocusInsideModal(event, paymentModal);
+            keepFocusInsideModal(event, imageViewerModal);
         });
         calculateExchange();
         await initializeFirebase();

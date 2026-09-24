@@ -1,18 +1,15 @@
-rules_version = "2";
+rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // --- Funciones de Ayuda ---
     function isSignedIn() {
       return request.auth != null;
     }
 
     function isAdmin() {
-      // Lista de UIDs de administradores
       return isSignedIn() && request.auth.uid in [
-        "R3QU4xRLmSQFiArCWWRwGBMEOhc2", 
-        "71YiNOk9MOc6mNjxnnKBLST1Clh2"
+        'R3QU4xRLmSQFiArCWWRwGBMEOhc2',
+        '71YiNOk9MOc6mNjxnnKBLST1Clh2'
       ];
     }
 
@@ -20,46 +17,206 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // --- Reglas de Acceso ---
+    function isCurrency(value) {
+      return value is string && value in ['CLP', 'VES', 'USDT', 'WLD'];
+    }
 
-    // 1. Cuentas bancarias del administrador (lectura pública)
-    // Cualquiera puede leer las cuentas para hacer una transferencia.
-    // Solo los administradores pueden crearlas, actualizarlas o borrarlas.
+    function isPositiveAmount(value) {
+      return value is number && value > 0 && value <= 1000000000000;
+    }
+
+    function isShortString(value, maxLength) {
+      return value is string && value.size() > 0 && value.size() <= maxLength;
+    }
+
+    function isOptionalShortString(value, maxLength) {
+      return value is string && value.size() <= maxLength;
+    }
+
+    function isAdminDestination(value) {
+      return value is map
+        && value.keys().hasOnly([
+          'id', 'bankName', 'accountHolder', 'rut', 'accountType',
+          'accountNumber', 'email', 'savedAt'
+        ])
+        && value.keys().hasAny(['id'])
+        && value.keys().hasAny(['bankName'])
+        && value.keys().hasAny(['accountHolder'])
+        && value.keys().hasAny(['rut'])
+        && value.keys().hasAny(['accountType'])
+        && value.keys().hasAny(['accountNumber'])
+        && value.keys().hasAny(['email'])
+        && value.keys().hasAny(['savedAt'])
+        && isShortString(value.id, 128)
+        && isShortString(value.bankName, 120)
+        && isShortString(value.accountHolder, 160)
+        && isShortString(value.rut, 64)
+        && isShortString(value.accountType, 80)
+        && isShortString(value.accountNumber, 128)
+        && isShortString(value.email, 320)
+        && value.savedAt == request.time;
+    }
+
+    function isUsdtDestination(value) {
+      return value is map
+        && value.keys().hasOnly(['wallet', 'network', 'notes'])
+        && value.keys().hasAny(['wallet'])
+        && value.keys().hasAny(['network'])
+        && value.keys().hasAny(['notes'])
+        && isShortString(value.wallet, 256)
+        && isShortString(value.network, 80)
+        && isOptionalShortString(value.notes, 500);
+    }
+
+    function isVesDestination(value) {
+      return value is map
+        && value.keys().hasOnly([
+          'beneficiary', 'idNumber', 'bank', 'accountType',
+          'accountNumber', 'notes'
+        ])
+        && value.keys().hasAny(['beneficiary'])
+        && value.keys().hasAny(['idNumber'])
+        && value.keys().hasAny(['bank'])
+        && value.keys().hasAny(['accountType'])
+        && value.keys().hasAny(['accountNumber'])
+        && value.keys().hasAny(['notes'])
+        && isShortString(value.beneficiary, 160)
+        && isShortString(value.idNumber, 64)
+        && isShortString(value.bank, 120)
+        && isShortString(value.accountType, 80)
+        && isShortString(value.accountNumber, 128)
+        && isOptionalShortString(value.notes, 500);
+    }
+
+    function isValidTransactionCreate(data, userId) {
+      return data.keys().hasOnly([
+        'amountSend', 'currencySend', 'amountReceive', 'currencyReceive',
+        'rateApplied', 'timestamp', 'userId', 'status', 'userReceiptUrl',
+        'adminReceiptUrl', 'userEmail', 'userDisplayName',
+        'adminDestinationAccount', 'userUsdtDestination', 'userVesDestination'
+      ])
+        && data.userId == userId
+        && data.status == 'Sin comprobante'
+        && data.timestamp == request.time
+        && data.keys().hasAny(['userEmail'])
+        && data.userEmail == request.auth.token.email
+        && isPositiveAmount(data.amountSend)
+        && isPositiveAmount(data.amountReceive)
+        && isPositiveAmount(data.rateApplied)
+        && isCurrency(data.currencySend)
+        && isCurrency(data.currencyReceive)
+        && data.userReceiptUrl == null
+        && data.adminReceiptUrl == null
+        && (!data.keys().hasAny(['userEmail']) || isShortString(data.userEmail, 320))
+        && (!data.keys().hasAny(['userDisplayName']) || isShortString(data.userDisplayName, 160))
+        && (!data.keys().hasAny(['adminDestinationAccount'])
+          || data.adminDestinationAccount == null
+          || isAdminDestination(data.adminDestinationAccount))
+        && (!data.keys().hasAny(['userUsdtDestination'])
+          || data.userUsdtDestination == null
+          || isUsdtDestination(data.userUsdtDestination))
+        && (!data.keys().hasAny(['userVesDestination'])
+          || data.userVesDestination == null
+          || isVesDestination(data.userVesDestination));
+    }
+
+    function isValidUserTransactionUpdate(before, after, appId, userId, transactionId) {
+      return before.userId == userId
+        && after.userId == before.userId
+        && after.amountSend == before.amountSend
+        && after.currencySend == before.currencySend
+        && after.amountReceive == before.amountReceive
+        && after.currencyReceive == before.currencyReceive
+        && after.rateApplied == before.rateApplied
+        && after.timestamp == before.timestamp
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'userReceiptUrl', 'userReceiptUploadedAt', 'status', 'cancelledAt'
+        ])
+        && (
+          (
+            before.status == 'Sin comprobante'
+            && before.userReceiptUrl == null
+            && after.status == 'Pendiente'
+            && after.keys().hasAny(['userReceiptUrl', 'userReceiptUploadedAt'])
+            && isShortString(after.userReceiptUrl, 2048)
+            && after.userReceiptUrl.matches('https://firebasestorage.googleapis.com/.*/artifacts%2F[^%]+%2Fusers%2F' + userId + '%2Ftransactions%2F' + transactionId + '%2Freceipts%2Fuser%2F.*')
+            && after.userReceiptUploadedAt == request.time
+            && after.adminReceiptUrl == before.adminReceiptUrl
+            && !after.keys().hasAny(['cancelledAt'])
+          )
+          || (
+            before.status in ['Sin comprobante', 'Pendiente']
+            && after.status == 'Cancelada'
+            && after.keys().hasAny(['cancelledAt'])
+            && after.cancelledAt == request.time
+            && after.userReceiptUrl == before.userReceiptUrl
+            && after.keys().hasAny(['userReceiptUploadedAt'])
+              == before.keys().hasAny(['userReceiptUploadedAt'])
+            && (!before.keys().hasAny(['userReceiptUploadedAt'])
+              || after.userReceiptUploadedAt == before.userReceiptUploadedAt)
+            && after.adminReceiptUrl == before.adminReceiptUrl
+          )
+        );
+    }
+
     match /artifacts/{appId}/public/data/admin_accounts/{accountId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly([
+          'bankName', 'accountHolder', 'accountNumber', 'rut',
+          'accountType', 'email', 'updatedBy', 'timestamp'
+        ])
+        && isShortString(request.resource.data.bankName, 120)
+        && isShortString(request.resource.data.accountHolder, 160)
+        && isShortString(request.resource.data.accountNumber, 128)
+        && isShortString(request.resource.data.rut, 64)
+        && isShortString(request.resource.data.accountType, 80)
+        && isShortString(request.resource.data.email, 320)
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.timestamp == request.time;
+      allow update, delete: if isAdmin();
     }
 
-    // 2. Transacciones de los usuarios
-    // Un usuario solo puede ver/crear/actualizar sus propias transacciones.
-    // Un administrador puede ver/actualizar cualquier transacción.
     match /artifacts/{appId}/users/{userId}/transactions/{transactionId} {
-      allow read, write: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || isAdmin();
+      // Orders are created only by the trusted Cloud Function, which calculates
+      // the quote server-side and writes with the Admin SDK.
+      allow create: if false;
+      allow update: if isAdmin()
+        || (isOwner(userId)
+          && isValidUserTransactionUpdate(resource.data, request.resource.data, appId, userId, transactionId));
+      allow delete: if isAdmin();
     }
 
-    // 2b. CollectionGroup para transacciones (usado por admin panel)
-    // Permite a los administradores consultar todas las transacciones usando collectionGroup
     match /{path=**}/transactions/{transactionId} {
       allow read: if isAdmin();
     }
 
-    // 3. Configuración de precios (márgenes)
-    // Cualquiera puede leer los márgenes para la calculadora.
-    // Solo los administradores pueden cambiarlos.
     match /config/pricing {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly([
+          'discountWldClp', 'discountClpVes', 'marginUsdtClp',
+          'updatedAt', 'updatedBy'
+        ])
+        && request.resource.data.discountWldClp is number
+        && request.resource.data.discountWldClp >= 0
+        && request.resource.data.discountWldClp <= 1
+        && request.resource.data.discountClpVes is number
+        && request.resource.data.discountClpVes >= 0
+        && request.resource.data.discountClpVes <= 1
+        && request.resource.data.marginUsdtClp is number
+        && request.resource.data.marginUsdtClp >= 0
+        && request.resource.data.marginUsdtClp <= 1
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedBy == request.auth.uid;
+      allow delete: if false;
     }
 
-    // 5. Cuentas beneficiarias (favoritos) de los usuarios
-    // Un usuario puede gestionar (leer, crear, actualizar, borrar) sus propias
-    // cuentas beneficiarias. Los administradores no necesitan acceso aquí.
     match /artifacts/{appId}/users/{userId}/beneficiaries/{beneficiaryId} {
       allow read, write: if isOwner(userId);
     }
 
-    // 4. Regla de denegación explícita para el resto de las rutas
-    // Deniega el acceso a cualquier otra ruta que no haya sido definida explícitamente.
     match /{path=**} {
       allow read, write: if false;
     }

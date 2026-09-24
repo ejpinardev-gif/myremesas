@@ -17,12 +17,30 @@ const FALLBACK_RATES = {
   VES_to_USDT_P2P: 36.00,
 };
 
+const RATES_CACHE_TTL_MS = 60_000;
+let ratesCache = null;
+
 const toNumber = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function getBinanceProxyConfig() {
+  const url = process.env.BINANCE_PROXY_URL;
+  const token = process.env.VPS_AUTH_TOKEN;
+  if (url && !token) {
+    console.warn("BINANCE_PROXY_URL está configurado sin VPS_AUTH_TOKEN; se usará la API directa.");
+    return null;
+  }
+  return url ? { url: url.replace(/\/$/, ""), token } : null;
+}
+
+function getPositiveRate(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
 
 // Bancos venezolanos y métodos de transferencia bancaria más comunes en Binance P2P VES
 const PAYMENT_METHOD_BANK_TRANSFER_REGEX = /(bank|banc|transfer|transferencia|mercantil|banesco|provincial|venezuela|bnc|bangente|fondo|bicentenario|sofitasa|activo|tesoro|exterior|plaza|agricola|agrícola|caribe|occidental|mibanco|mi\s*banco|100\s*%)/i;
@@ -71,17 +89,16 @@ async function getBinanceP2POffers({ fiat, tradeType, rows = 20, payTypes = [], 
       transAmount,
     };
 
-    const useProxy = !!process.env.BINANCE_PROXY_URL;
-    const vpsToken = process.env.VPS_AUTH_TOKEN || 'manzano_dev_token';
-    const url = useProxy 
-      ? `${process.env.BINANCE_PROXY_URL}/api/proxy/p2p` 
+    const proxy = getBinanceProxyConfig();
+    const url = proxy
+      ? `${proxy.url}/api/proxy/p2p`
       : BINANCE_P2P_SEARCH_URL;
 
     const headers = {
         "Content-Type": "application/json",
         "User-Agent": "Mozilla/5.0",
     };
-    if (useProxy) headers["x-vps-token"] = vpsToken;
+    if (proxy) headers["x-vps-token"] = proxy.token;
 
     const response = await axios.post(url, payload, {
       timeout: 10000,
@@ -97,7 +114,7 @@ async function getBinanceP2POffers({ fiat, tradeType, rows = 20, payTypes = [], 
   }
 }
 
-async function getBinanceP2POffersWithRetry(options, attempts = 3, delayMs = 400) {
+async function getBinanceP2POffersWithRetry(options, attempts = 2, delayMs = 250) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const rows = await getBinanceP2POffers(options);
     if (rows.length > 0) {
@@ -206,14 +223,14 @@ async function getBinanceVesSellRate() {
 }
 
 async function getBinanceP2PSixthRates() {
-  const clpBuyRows = await getBinanceP2POffersWithRetry({ fiat: "CLP", tradeType: "BUY" });
-
-  const clpBuy6 = toNumber(clpBuyRows[5]?.adv?.price);
-  const vesSell = await getBinanceVesSellRate();
+  const [clpBuyRows, vesSell] = await Promise.all([
+    getBinanceP2POffersWithRetry({ fiat: "CLP", tradeType: "BUY" }),
+    getBinanceVesSellRate(),
+  ]);
 
   return {
-    clpBuy6,
-    vesSell6Bank: vesSell.rate,
+    clpBuy6: getPositiveRate(clpBuyRows[5]?.adv?.price),
+    vesSell6Bank: getPositiveRate(vesSell.rate),
     vesSellSource: vesSell.rate > 0 ? vesSell.source : null,
   };
 }
@@ -233,7 +250,7 @@ async function getCriptoYaP2PRate(fiat, volume = 1) {
     const response = await axios.get(url, { timeout: 7000 });
     // CriptoYa devuelve el precio de COMPRA (ask) para el usuario.
     if (response.data && response.data.ask) {
-      return response.data.ask;
+      return getPositiveRate(response.data.ask);
     }
     console.warn(`Respuesta inesperada de CriptoYa para ${fiat}:`, response.data);
     return null;
@@ -248,13 +265,12 @@ async function getCriptoYaP2PRate(fiat, volume = 1) {
  */
 async function getBinanceSpotRate(symbol) {
   try {
-    const useProxy = !!process.env.BINANCE_PROXY_URL;
-    const vpsToken = process.env.VPS_AUTH_TOKEN || 'manzano_dev_token';
-    const url = useProxy 
-      ? `${process.env.BINANCE_PROXY_URL}/api/proxy/spot` 
+    const proxy = getBinanceProxyConfig();
+    const url = proxy
+      ? `${proxy.url}/api/proxy/spot`
       : BINANCE_SPOT_PRICE_URL;
 
-    const headers = useProxy ? { "x-vps-token": vpsToken } : {};
+    const headers = proxy ? { "x-vps-token": proxy.token } : {};
 
     const response = await axios.get(url, {
       params: { symbol },
@@ -263,7 +279,7 @@ async function getBinanceSpotRate(symbol) {
     });
 
     if (response.data?.price) {
-      return parseFloat(response.data.price);
+      return getPositiveRate(response.data.price);
     }
 
     console.warn(`Respuesta inesperada de Binance para ${symbol}:`, response.data);
@@ -291,7 +307,7 @@ async function getBybitSpotRate(symbol) {
 
     const ticker = response.data?.result?.list?.[0];
     if (ticker?.lastPrice) {
-      return parseFloat(ticker.lastPrice);
+      return getPositiveRate(ticker.lastPrice);
     }
 
     console.warn(`Respuesta inesperada de Bybit para ${symbol}:`, response.data);
@@ -316,7 +332,7 @@ async function getGateSpotRate(currencyPair) {
 
     const ticker = Array.isArray(response.data) ? response.data[0] : null;
     if (ticker?.last) {
-      return parseFloat(ticker.last);
+      return getPositiveRate(ticker.last);
     }
 
     console.warn(`Respuesta inesperada de Gate.io para ${currencyPair}:`, response.data);
@@ -367,104 +383,143 @@ async function getCoinGeckoBackupRates() {
   }
 }
 
-// Función principal de Vercel Serverless
+async function buildRatesSnapshot() {
+  const [
+    p2pBinance,
+    clpRateCriptoYa,
+    vesRateCriptoYa,
+    wldRateBinance,
+    wldRateBybit,
+    wldRateGate,
+    backupRatesCoinGecko,
+  ] = await Promise.all([
+    getBinanceP2PSixthRates(),
+    getCriptoYaP2PRate("clp"),
+    getCriptoYaP2PRate("ves", VES_SELL_TARGET_AMOUNT),
+    getBinanceSpotRate("WLDUSDT"),
+    getBybitSpotRate("WLDUSDT"),
+    getGateSpotRate("WLD_USDT"),
+    getCoinGeckoBackupRates(),
+  ]);
+
+  const usdtToClpFromBinance6 = p2pBinance.clpBuy6;
+  const adjustedVesRateCriptoYa = adjustVesCriptoYaRate(vesRateCriptoYa);
+  const usdtToVesFromBinance6BankSell = p2pBinance.vesSell6Bank
+    || adjustedVesRateCriptoYa
+    || null;
+  const vesFromDirectBinance = Boolean(p2pBinance.vesSell6Bank);
+
+  const backupWld = getPositiveRate(backupRatesCoinGecko?.wld_usdt);
+  const backupClp = getPositiveRate(backupRatesCoinGecko?.usdt_clp);
+  const backupVes = getPositiveRate(backupRatesCoinGecko?.usdt_ves);
+  const wldToUsdt = wldRateBinance || wldRateBybit || wldRateGate || backupWld || FALLBACK_RATES.WLD_to_USDT;
+  const usdtToClp = usdtToClpFromBinance6 || clpRateCriptoYa || backupClp || FALLBACK_RATES.USDT_to_CLP_P2P;
+  const usdtToVes = usdtToVesFromBinance6BankSell || vesRateCriptoYa || backupVes || FALLBACK_RATES.VES_to_USDT_P2P;
+
+  const wldSource = wldRateBinance
+    ? 'Binance Spot'
+    : (wldRateBybit ? 'Bybit Spot' : (wldRateGate ? 'Gate.io Spot' : (backupWld ? 'CoinGecko' : 'Fallback')));
+  const clpSource = usdtToClpFromBinance6
+    ? 'Binance P2P BUY #6'
+    : (clpRateCriptoYa ? 'CriptoYa' : (backupClp ? 'CoinGecko' : 'Fallback'));
+  const vesSource = p2pBinance.vesSell6Bank
+    ? (p2pBinance.vesSellSource || `Binance P2P SELL (${VES_SELL_TARGET_AMOUNT} VES)`)
+    : (usdtToVesFromBinance6BankSell
+      ? 'Binance P2P via CriptoYa'
+      : (vesRateCriptoYa ? 'CriptoYa' : (backupVes ? 'CoinGecko' : 'Fallback')));
+
+  console.log(`Rates Summary: CLP P2P=${usdtToClp}, VES P2P=${usdtToVes} (Direct VES: ${vesFromDirectBinance})`);
+
+  return {
+    success: true,
+    WLD_to_USDT: wldToUsdt,
+    USDT_to_CLP_P2P: usdtToClp,
+    USDT_to_CLP_P2P_BUY_6TH: usdtToClpFromBinance6,
+    USDT_CLP_BUY_6TH: usdtToClpFromBinance6,
+    USDT_to_VES_P2P_SELL_6TH_BANK_TRANSFER: usdtToVesFromBinance6BankSell,
+    USDT_VES_SELL_6TH_BANK_TRANSFER: usdtToVesFromBinance6BankSell,
+    USDT_to_VES_P2P: usdtToVes,
+    VES_to_USDT_P2P: usdtToVes,
+    degraded: wldSource === 'Fallback' || clpSource === 'Fallback' || vesSource === 'Fallback',
+    meta: {
+      wld_source: wldSource,
+      clp_source: clpSource,
+      ves_source: vesSource,
+      generated_at: new Date().toISOString(),
+      debug: {
+        proxy_active: Boolean(getBinanceProxyConfig()),
+        binance_p2p_clp: Boolean(usdtToClpFromBinance6),
+        binance_p2p_ves: Boolean(p2pBinance.vesSell6Bank),
+      },
+    },
+  };
+}
+
+function buildFallbackSnapshot(error) {
+  console.error("Error general en la función de tasas:", error?.message || error);
+  return {
+    success: true,
+    WLD_to_USDT: FALLBACK_RATES.WLD_to_USDT,
+    USDT_to_CLP_P2P: FALLBACK_RATES.USDT_to_CLP_P2P,
+    USDT_to_CLP_P2P_BUY_6TH: null,
+    USDT_CLP_BUY_6TH: null,
+    USDT_to_VES_P2P_SELL_6TH_BANK_TRANSFER: null,
+    USDT_VES_SELL_6TH_BANK_TRANSFER: null,
+    USDT_to_VES_P2P: FALLBACK_RATES.VES_to_USDT_P2P,
+    VES_to_USDT_P2P: FALLBACK_RATES.VES_to_USDT_P2P,
+    degraded: true,
+    meta: {
+      wld_source: 'Fallback',
+      clp_source: 'Fallback',
+      ves_source: 'Fallback',
+      generated_at: new Date().toISOString(),
+    },
+  };
+}
+
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Content-Type", "application/json");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Cache-Control", "public, max-age=15, s-maxage=30, stale-while-revalidate=120");
+  res.setHeader("X-Content-Type-Options", "nosniff");
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return res.status(204).end();
   }
 
-  try {
-    const p2pBinance = await getBinanceP2PSixthRates();
-    const [
-      clpRateCriptoYa,
-      vesRateCriptoYa,
-      wldRateBinance,
-      wldRateBybit,
-      wldRateGate,
-      backupRatesCoinGecko,
-    ] = await Promise.all([
-      getCriptoYaP2PRate("clp"),
-      getCriptoYaP2PRate("ves", VES_SELL_TARGET_AMOUNT),
-      getBinanceSpotRate("WLDUSDT"),
-      getBybitSpotRate("WLDUSDT"),
-      getGateSpotRate("WLD_USDT"),
-      getCoinGeckoBackupRates(),
-    ]);
-
-    const usdtToClpFromBinance6 = p2pBinance.clpBuy6;
-    // Tasa directa de Binance P2P VES SELL. Si está bloqueada desde Vercel (geo),
-    // CriptoYa scrape el mismo mercado — usamos esa tasa como equivalente.
-    const adjustedVesRateCriptoYa = adjustVesCriptoYaRate(vesRateCriptoYa);
-    const usdtToVesFromBinance6BankSell = p2pBinance.vesSell6Bank > 0
-      ? p2pBinance.vesSell6Bank
-      : (adjustedVesRateCriptoYa || null);
-    const vesFromDirectBinance = p2pBinance.vesSell6Bank > 0;
-
-    console.log(`Rates Summary: CLP P2P=${usdtToClpFromBinance6}, VES P2P=${usdtToVesFromBinance6BankSell} (Direct: ${vesFromDirectBinance})`);
-
-    const usdtToClp = usdtToClpFromBinance6
-      || clpRateCriptoYa
-      || backupRatesCoinGecko?.usdt_clp
-      || FALLBACK_RATES.USDT_to_CLP_P2P;
-
-    const usdtToVes = usdtToVesFromBinance6BankSell
-      || vesRateCriptoYa
-      || backupRatesCoinGecko?.usdt_ves
-      || FALLBACK_RATES.VES_to_USDT_P2P;
-
-    const finalRates = {
-      success: true,
-      WLD_to_USDT: wldRateBinance || wldRateBybit || wldRateGate || backupRatesCoinGecko?.wld_usdt || FALLBACK_RATES.WLD_to_USDT,
-      USDT_to_CLP_P2P: usdtToClp,
-      USDT_to_CLP_P2P_BUY_6TH: usdtToClpFromBinance6 || null,
-      USDT_CLP_BUY_6TH: usdtToClpFromBinance6 || null,
-      USDT_to_VES_P2P_SELL_6TH_BANK_TRANSFER: usdtToVesFromBinance6BankSell || null,
-      USDT_VES_SELL_6TH_BANK_TRANSFER: usdtToVesFromBinance6BankSell || null,
-      USDT_to_VES_P2P: usdtToVes,
-      // Campo legado: se mantiene por compatibilidad hacia atrás.
-      VES_to_USDT_P2P: usdtToVes,
-      meta: {
-        wld_source: wldRateBinance
-          ? 'Binance Spot'
-          : (wldRateBybit
-            ? 'Bybit Spot'
-            : (wldRateGate
-              ? 'Gate.io Spot'
-              : (backupRatesCoinGecko?.wld_usdt ? 'CoinGecko' : 'Fallback'))),
-        clp_source: usdtToClpFromBinance6
-          ? 'Binance P2P BUY #6'
-          : (clpRateCriptoYa ? 'CriptoYa' : (backupRatesCoinGecko?.usdt_clp ? 'CoinGecko' : 'Fallback')),
-        ves_source: usdtToVesFromBinance6BankSell
-          ? (vesFromDirectBinance
-            ? (p2pBinance.vesSellSource || `Binance P2P SELL (${VES_SELL_TARGET_AMOUNT} VES)`)
-            : 'Binance P2P via CriptoYa')
-          : (backupRatesCoinGecko?.usdt_ves ? 'CoinGecko' : 'Fallback'),
-        debug: {
-            proxy_active: !!process.env.BINANCE_PROXY_URL,
-            binance_p2p_clp: !!usdtToClpFromBinance6,
-            binance_p2p_ves: !!p2pBinance.vesSell6Bank
-        }
-      }
-    };
-
-    res.status(200).json(finalRates);
-
-  } catch (error) {
-    console.error("Error general en la función de tasas:", error.message);
-    res.status(500).json({
-      success: false,
-      message: "Error al procesar tasas, usando valores de referencia.",
-      ...FALLBACK_RATES,
-      meta: {
-        wld_source: 'Fallback',
-        clp_source: 'Fallback',
-        ves_source: 'Fallback',
-      }
-    });
+  if (req.method !== 'GET') {
+    return res.status(405).json({ success: false, message: "Método no permitido." });
   }
+
+  const now = Date.now();
+  const cacheIsFresh = ratesCache && (now - ratesCache.cachedAt) < RATES_CACHE_TTL_MS;
+
+  if (!cacheIsFresh) {
+    try {
+      ratesCache = {
+        payload: await buildRatesSnapshot(),
+        cachedAt: Date.now(),
+      };
+    } catch (error) {
+      ratesCache = {
+        payload: buildFallbackSnapshot(error),
+        cachedAt: Date.now(),
+      };
+    }
+  }
+
+  const ageSeconds = Math.max(0, Math.round((now - ratesCache.cachedAt) / 1000));
+  return res.status(200).json({
+    ...ratesCache.payload,
+    meta: {
+      ...ratesCache.payload.meta,
+      cache: cacheIsFresh ? 'hit' : 'miss',
+      age_seconds: ageSeconds,
+    },
+  });
 };
+
+module.exports.buildRatesSnapshot = buildRatesSnapshot;
+module.exports.buildFallbackSnapshot = buildFallbackSnapshot;

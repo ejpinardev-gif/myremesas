@@ -20,14 +20,15 @@
     <meta name="theme-color" content="#0b0f1a">
 
     <link rel="icon" href="/favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap">
 
     <!-- Carga de Tailwind CSS compilado -->
 
     <link href="/styles/output.css" rel="stylesheet">
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap');
-
         /* ============================================================
            TOKENS
            z-index: bottom-nav 40 · menu-backdrop 55 · menu-sheet 60 ·
@@ -1378,7 +1379,7 @@
             </div>
         </div>
 
-        <div class="w-full flex flex-col items-center gap-5">
+        <div id="auth-forms" class="w-full flex flex-col items-center gap-5">
             <!-- Formulario de Inicio de Sesión -->
             <div id="login-form" class="auth-card">
                 <h2>Iniciar sesión</h2>
@@ -1394,9 +1395,27 @@
                     <button type="submit" class="btn btn-primary btn-lg w-full">Entrar</button>
                 </form>
                 <p class="auth-switch">
-                    ¿No tienes cuenta? <button id="show-register-form" class="btn btn-link btn-sm">Regístrate</button>
+                    <button type="button" id="show-reset-password-form" class="btn btn-link btn-sm">Olvidé mi contraseña</button>
                 </p>
-                <p id="login-status" class="auth-status-error text-red-400 hidden"></p>
+                <p class="auth-switch">
+                    ¿No tienes cuenta? <button type="button" id="show-register-form" class="btn btn-link btn-sm">Regístrate</button>
+                </p>
+                <p id="login-status" class="auth-status-error text-red-400 hidden" role="alert" aria-live="assertive"></p>
+            </div>
+
+            <div id="reset-password-form" class="auth-card hidden">
+                <h2>Restablecer contraseña</h2>
+                <form>
+                    <div class="mb-5">
+                        <label for="reset-password-email" class="field-label">Correo electrónico</label>
+                        <input type="email" id="reset-password-email" class="field-control" autocomplete="email" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg w-full">Enviar enlace de recuperación</button>
+                </form>
+                <p class="auth-switch">
+                    <button type="button" id="show-login-from-reset" class="btn btn-link btn-sm">Volver al inicio de sesión</button>
+                </p>
+                <p id="reset-password-status" class="auth-status-error text-slate-300 hidden" role="status" aria-live="polite"></p>
             </div>
 
             <!-- Formulario de Registro -->
@@ -1409,7 +1428,7 @@
                     </div>
                     <div class="mb-4">
                         <label for="register-password" class="field-label">Contraseña</label>
-                        <input type="password" id="register-password" class="field-control" autocomplete="new-password" required>
+                        <input type="password" id="register-password" class="field-control" autocomplete="new-password" minlength="6" required>
                     </div>
                     <div class="mb-5">
                         <label for="register-password-confirm" class="field-label">Confirmar contraseña</label>
@@ -1418,9 +1437,9 @@
                     <button type="submit" class="btn btn-primary btn-lg w-full">Registrar</button>
                 </form>
                 <p class="auth-switch">
-                    ¿Ya tienes cuenta? <button id="show-login-form" class="btn btn-link btn-sm">Inicia sesión</button>
+                    ¿Ya tienes cuenta? <button type="button" id="show-login-form" class="btn btn-link btn-sm">Inicia sesión</button>
                 </p>
-                <p id="register-status" class="auth-status-error text-red-400 hidden"></p>
+                <p id="register-status" class="auth-status-error text-red-400 hidden" role="alert" aria-live="assertive"></p>
             </div>
         </div>
 
@@ -1830,16 +1849,19 @@
                 <div id="transaction-history" class="space-y-3 md:max-h-[32rem] md:overflow-y-auto md:pr-2">
                     <p class="text-slate-500 text-sm" id="loading-history">Abre esta vista para cargar el historial.</p>
                 </div>
+                <div class="mt-4 flex justify-center">
+                    <button id="history-load-more-button" type="button" class="btn btn-outline btn-sm hidden">Cargar órdenes anteriores</button>
+                </div>
             </div>
         </div>
 
     </div>
 
     <!-- MODAL DE PAGO (OCULTO POR DEFECTO) -->
-    <div id="payment-details-modal" class="modal-overlay hidden">
+    <div id="payment-details-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="payment-modal-title">
         <div class="modal-content">
             <div class="flex items-start justify-between gap-3 mb-5">
-                <h2 class="section-title text-2xl text-gray-900">Detalles de la transferencia</h2>
+                <h2 id="payment-modal-title" class="section-title text-2xl text-gray-900">Detalles de la transferencia</h2>
                 <button id="close-modal-x-button" type="button" class="btn btn-outline btn-icon flex-shrink-0 md:hidden" aria-label="Cerrar">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
@@ -1875,25 +1897,25 @@
                         <h4 class="text-sm font-semibold text-gray-900">Datos para recibir transferencia en VES</h4>
                         <p class="text-xs text-slate-500">Completa los datos de la cuenta destino en Venezuela para que podamos procesar tu pago.</p>
                         <label class="field-label" for="ves-beneficiary-input">Nombre del beneficiario</label>
-                        <input id="ves-beneficiary-input" type="text" class="field-control field-control-sm" placeholder="Ej: Maria Perez">
+                        <input id="ves-beneficiary-input" type="text" class="field-control field-control-sm" placeholder="Ej: Maria Perez" maxlength="160" required>
                         <label class="field-label mt-2" for="ves-id-input">Documento de identidad</label>
-                        <input id="ves-id-input" type="text" class="field-control field-control-sm" placeholder="Ej: V-12345678">
+                        <input id="ves-id-input" type="text" class="field-control field-control-sm" placeholder="Ej: V-12345678" maxlength="64" required>
                         <label class="field-label mt-2" for="ves-bank-input">Banco destino</label>
-                        <input id="ves-bank-input" type="text" class="field-control field-control-sm" placeholder="Ej: Banco de Venezuela">
+                        <input id="ves-bank-input" type="text" class="field-control field-control-sm" placeholder="Ej: Banco de Venezuela" maxlength="120" required>
                         <label class="field-label mt-2" for="ves-account-type-input">Tipo de cuenta</label>
-                        <input id="ves-account-type-input" type="text" class="field-control field-control-sm" placeholder="Ej: Cuenta Corriente o Ahorro">
+                        <input id="ves-account-type-input" type="text" class="field-control field-control-sm" placeholder="Ej: Cuenta Corriente o Ahorro" maxlength="80" required>
                         <label class="field-label mt-2" for="ves-account-number-input">Número de cuenta</label>
-                        <input id="ves-account-number-input" type="text" class="field-control field-control-sm" placeholder="Ej: 0102-0123-45-1234567890">
+                        <input id="ves-account-number-input" type="text" class="field-control field-control-sm" placeholder="Ej: 0102-0123-45-1234567890" maxlength="128" required>
                         <label class="field-label mt-2" for="ves-notes-input">Notas adicionales (opcional)</label>
-                        <input id="ves-notes-input" type="text" class="field-control field-control-sm" placeholder="Información extra para el pago (opcional)">
+                        <input id="ves-notes-input" type="text" class="field-control field-control-sm" placeholder="Información extra para el pago (opcional)" maxlength="500">
                     </div>
                     <div id="usdt-destination-form" class="hidden space-y-2 bg-white border border-slate-200 rounded-2xl p-3">
                         <h4 class="text-sm font-semibold text-gray-900">Datos para recibir USDT</h4>
                         <p class="text-xs text-slate-500">Ingresa los datos exactos de tu cuenta o wallet para recibir el pago en USDT.</p>
                         <label class="field-label" for="usdt-wallet-input">Binance ID / Binance Pay / Wallet USDT</label>
-                        <input id="usdt-wallet-input" type="text" class="field-control field-control-sm" placeholder="Ej: Binance Pay ID 123456789 o Wallet TRC20">
+                        <input id="usdt-wallet-input" type="text" class="field-control field-control-sm" placeholder="Ej: Binance Pay ID 123456789 o Wallet TRC20" maxlength="256" required>
                         <label class="field-label mt-2" for="usdt-network-select">Red preferida</label>
-                        <select id="usdt-network-select" class="field-control field-control-sm">
+                        <select id="usdt-network-select" class="field-control field-control-sm" required>
                             <option value="">Selecciona la red</option>
                             <option value="TRC20">TRC20 (Tron)</option>
                             <option value="BEP20">BEP20 (BSC)</option>
@@ -1903,7 +1925,7 @@
                             <option value="Otro">Otro (especificar en notas)</option>
                         </select>
                         <label class="field-label mt-2" for="usdt-notes-input">Notas adicionales (opcional)</label>
-                        <input id="usdt-notes-input" type="text" class="field-control field-control-sm" placeholder="Información extra, si aplica">
+                        <input id="usdt-notes-input" type="text" class="field-control field-control-sm" placeholder="Información extra, si aplica" maxlength="500">
                     </div>
 
                     <div class="space-y-2 bg-white border border-slate-200 rounded-2xl p-3">
@@ -1917,7 +1939,7 @@
                         </div>
                         <p id="receipt-upload-status" class="text-xs text-slate-500 hidden"></p>
                         <p class="text-xs text-slate-500">Si necesitas asistencia adicional, también puedes compartirlo por WhatsApp.</p>
-                        <a href="https://wa.me/56930072631?text=Hola%2C%20adjunto%20el%20comprobante%20de%20mi%20transferencia.%20Nombre:%20[tu%20nombre]%20Monto:%20[monto]" target="_blank" rel="noopener" class="btn btn-secondary btn-md gap-2">
+                        <a href="https://wa.me/56930072631?text=Hola%2C%20adjunto%20el%20comprobante%20de%20mi%20transferencia.%20Nombre%3A%20%5Btu%20nombre%5D%20Monto%3A%20%5Bmonto%5D" target="_blank" rel="noopener" class="btn btn-secondary btn-md gap-2">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12.04 2C6.57 2 2.04 6.54 2.04 12c0 2.1.55 4.05 1.6 5.77L2 22l4.35-1.61c1.63 1.12 3.55 1.71 5.7 1.71 5.46 0 10-4.54 10-10s-4.53-10-9.99-10Zm5.87 14.52c-.25.7-1.47 1.34-2.02 1.43-.52.1-1.19.18-1.92-.12-.44-.17-1-.32-1.73-.63-3.05-1.32-5.03-4.41-5.18-4.62-.15-.21-1.24-1.65-1.24-3.15s.79-2.25 1.08-2.56c.25-.28.67-.4 1.08-.4.13 0 .25.01.36.01.32.01.48.03.69.54.25.6.85 2.07.92 2.22.07.15.11.32.02.5-.08.17-.12.28-.24.44-.12.15-.26.33-.37.45-.12.12-.24.26-.1.5.14.25.63 1.04 1.35 1.69.93.83 1.71 1.09 1.96 1.21.25.13.4.11.55-.06.14-.17.63-.73.8-.98.17-.24.34-.2.57-.12.23.08 1.49.7 1.74.83.26.13.43.19.49.3.06.12.06.7-.2 1.4Z"/></svg>
                             Enviar por WhatsApp
                         </a>
@@ -1935,7 +1957,7 @@
     </div>
 
     <!-- VISOR DE IMÁGENES MODAL (OCULTO POR DEFECTO) -->
-    <div id="image-viewer-modal" class="modal-overlay hidden">
+    <div id="image-viewer-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="image-viewer-title">
         <div class="modal-content relative max-w-3xl w-full">
             <button id="close-image-viewer-button" class="btn btn-outline btn-icon absolute -top-3 -right-3 z-10" aria-label="Cerrar visor">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -1944,13 +1966,13 @@
             </button>
             <h3 id="image-viewer-title" class="text-lg font-semibold text-gray-900 mb-4">Comprobante</h3>
             <div class="bg-slate-100 rounded-xl">
-                <img id="image-viewer-img" src="" alt="Comprobante de pago" class="max-h-[80vh] w-full object-contain rounded-xl">
+                <img id="image-viewer-img" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="Comprobante de pago" class="max-h-[80vh] w-full object-contain rounded-xl">
             </div>
         </div>
     </div>
 
     <!-- MODAL DE CONFIRMACIÓN PROPIO -->
-    <div id="confirm-modal" class="modal-overlay hidden">
+    <div id="confirm-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="confirm-title">
         <div class="confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
             <h3 id="confirm-title">Confirmar acción</h3>
             <p id="confirm-message"></p>
@@ -1962,7 +1984,7 @@
     </div>
 
     <!-- Firebase SDKs -->
-    <script type="module" src="main.js" defer></script>
+    <script type="module" src="main.js"></script>
 
 </body>
 

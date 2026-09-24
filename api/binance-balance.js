@@ -1,116 +1,167 @@
 const axios = require("axios");
 const crypto = require("crypto");
+const {
+  extractBearerToken,
+  isAdminUid,
+  verifyFirebaseIdToken,
+} = require("./firebase-auth");
 
-function setCorsHeaders(res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+const ALLOWED_ORIGINS = new Set([
+  "https://myremesas-prod-deploy.vercel.app",
+  "https://myremesas-prod-deploy-ejpinardev-gifs-projects.vercel.app",
+  "http://localhost:3000",
+]);
+const ALLOWED_ASSETS = new Set(["USDT"]);
+
+function setResponseHeaders(req, res) {
+  const origin = req?.headers?.origin || req?.headers?.Origin;
   res.setHeader("Content-Type", "application/json");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Vary", "Origin");
+
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+  }
 }
 
-module.exports = async (req, res) => {
-  setCorsHeaders(res);
+function toFiniteNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
+function normalizeBalance(responseData, requestedAsset) {
+  if (responseData?.success === false) {
+    throw new Error(responseData?.message || "El proxy rechazó la consulta.");
   }
 
-  if (req.method !== "GET") {
-    return res.status(405).json({ success: false, message: "Method not allowed" });
+  if (responseData?.balance === null) {
+    return { success: true, asset: responseData.asset || requestedAsset, balance: null };
   }
 
-  // Usar el proxy de Cloudflare si está configurado, si no, usar la API directa.
-  const useProxy = !!process.env.BINANCE_PROXY_URL;
+  const source = responseData?.balance && typeof responseData.balance === "object"
+    ? responseData.balance
+    : responseData;
 
-  const asset = (req.query.asset || "USDT").toUpperCase();
+  if (!source || (!Object.prototype.hasOwnProperty.call(source, "free") && !Object.prototype.hasOwnProperty.call(source, "total"))) {
+    throw new Error("El proxy devolvió una respuesta de balance no reconocida.");
+  }
 
-  try {
-    let responseData;
+  const free = toFiniteNumber(source.free);
+  const locked = toFiniteNumber(source.locked);
+  const withdrawing = toFiniteNumber(source.withdrawing);
+  const total = source.total != null ? toFiniteNumber(source.total) : free + locked + withdrawing;
 
-    if (useProxy) {
-      // --- Lógica para llamar al Proxy de DigitalOcean ---
-      const proxyUrl = `${process.env.BINANCE_PROXY_URL}/api/balance?asset=${asset}`;
-      console.log(`Usando proxy de DigitalOcean: ${proxyUrl}`);
-      const vpsToken = process.env.VPS_AUTH_TOKEN || 'manzano_dev_token';
-      const { data } = await axios.get(proxyUrl, { 
-          timeout: 8000,
-          headers: { 'x-vps-token': vpsToken }
-      });
-      responseData = data;
-    } else {
-      // --- Lógica original para llamar directamente a Binance (para desarrollo local) ---
-      console.log("Usando API directa de Binance (entorno local o sin proxy configurado).");
-      const apiKey = process.env.BINANCE_API_KEY;
-      const apiSecret = process.env.BINANCE_API_SECRET;
+  return {
+    success: true,
+    asset: responseData?.asset || requestedAsset,
+    balance: { free, locked, withdrawing, total },
+  };
+}
 
-      if (!apiKey || !apiSecret) {
-        return res.status(500).json({
-          success: false,
-          message: "Credenciales de Binance no configuradas. Define BINANCE_API_KEY y BINANCE_API_SECRET.",
-        });
-      }
+async function fetchDirectBinanceBalance(asset) {
+  const apiKey = process.env.BINANCE_API_KEY;
+  const apiSecret = process.env.BINANCE_API_SECRET;
 
-      const params = { timestamp: Date.now(), recvWindow: 5000 };
-      const queryString = new URLSearchParams(params).toString();
-      const signature = crypto.createHmac("sha256", apiSecret).update(queryString).digest("hex");
+  if (!apiKey || !apiSecret) {
+    const error = new Error("Credenciales de Binance no configuradas.");
+    error.statusCode = 500;
+    throw error;
+  }
 
-      const { data: binanceData } = await axios.get("https://api1.binance.com/sapi/v1/capital/config/getall", {
-        params: { ...params, signature },
-        headers: { "X-MBX-APIKEY": apiKey },
-        timeout: 8000,
-      });
+  const params = { timestamp: Date.now(), recvWindow: 5000 };
+  const queryString = new URLSearchParams(params).toString();
+  const signature = crypto
+    .createHmac("sha256", apiSecret)
+    .update(queryString)
+    .digest("hex");
 
-      if (!Array.isArray(binanceData)) {
-        return res.status(502).json({ success: false, message: "Respuesta inesperada de Binance.", data: binanceData });
-      }
+  const { data } = await axios.get("https://api1.binance.com/sapi/v1/capital/config/getall", {
+    params: { ...params, signature },
+    headers: { "X-MBX-APIKEY": apiKey },
+    timeout: 8000,
+  });
 
-      // Formatear la respuesta para que sea igual a la del proxy
-      const assetInfo = binanceData.find((item) => item.coin === asset);
-      const free = parseFloat(assetInfo?.free || "0");
-      const locked = parseFloat(assetInfo?.locked || "0");
-      const withdrawing = parseFloat(assetInfo?.withdrawing || "0");
+  if (!Array.isArray(data)) {
+    throw new Error("Binance devolvió una respuesta inesperada.");
+  }
 
-      responseData = {
-        success: true,
-        asset,
-        balance: assetInfo ? { free, locked, withdrawing, total: free + locked + withdrawing } : null,
-      };
+  const assetInfo = data.find((item) => item.coin === asset);
+  if (!assetInfo) return { success: true, asset, balance: null };
+  return normalizeBalance(assetInfo, asset);
+}
+
+async function fetchProxyBinanceBalance(asset) {
+  const proxyUrl = process.env.BINANCE_PROXY_URL;
+  const proxyToken = process.env.VPS_AUTH_TOKEN;
+
+  if (!proxyUrl || !proxyToken) {
+    const error = new Error("El proxy de Binance no está configurado correctamente.");
+    error.statusCode = 500;
+    throw error;
+  }
+
+  const { data } = await axios.get(`${proxyUrl.replace(/\/$/, "")}/api/balance`, {
+    params: { asset },
+    timeout: 8000,
+    headers: { "x-vps-token": proxyToken },
+  });
+
+  return normalizeBalance(data, asset);
+}
+
+function createHandler({
+  verifyIdToken = verifyFirebaseIdToken,
+  adminCheck = isAdminUid,
+} = {}) {
+  return async function binanceBalanceHandler(req, res) {
+    setResponseHeaders(req, res);
+
+    if (req.method === "OPTIONS") {
+      return res.status(204).end();
     }
 
-    // Handle proxy response (already formatted) vs direct API response (raw array)
-    let finalResponse;
-
-    if (useProxy) {
-      // El VPS de DigitalOcean ya nos devuelve el balance formateado
-      if (responseData && (responseData.asset || responseData.free)) {
-          finalResponse = {
-            success: true,
-            asset: responseData.asset || asset,
-            balance: {
-              free: parseFloat(responseData.free || "0"),
-              locked: parseFloat(responseData.locked || "0"),
-              withdrawing: parseFloat(responseData.withdrawing || "0"),
-              total: parseFloat(responseData.free || "0") + parseFloat(responseData.locked || "0") + parseFloat(responseData.withdrawing || "0"),
-            },
-          };
-      } else {
-          console.error("Respuesta inesperada del proxy:", responseData);
-          return res.status(502).json({ success: false, message: "Respuesta inesperada del proxy.", data: responseData });
-      }
-    } else {
-      // Direct API already formatted the response
-      finalResponse = responseData;
+    if (req.method !== "GET") {
+      return res.status(405).json({ success: false, message: "Método no permitido." });
     }
 
-    return res.status(200).json(finalResponse);
-  } catch (error) {
-    const status = error.response?.status;
-    const message = error.response?.data?.error || error.response?.data?.msg || error.message;
-    console.error(`Error en API binance-balance: ${message} (Status: ${status})`);
-    return res.status(status || 500).json({
-      success: false,
-      message: `Error al consultar saldo en Binance: ${message}`,
-      status,
-    });
-  }
-};
+    const token = extractBearerToken(req);
+    if (!token) {
+      return res.status(401).json({ success: false, message: "Debes iniciar sesión." });
+    }
+
+    try {
+      const decodedToken = await verifyIdToken(token);
+      if (!adminCheck(decodedToken.uid)) {
+        return res.status(403).json({ success: false, message: "No autorizado." });
+      }
+
+      const asset = String(req.query?.asset || "USDT").trim().toUpperCase();
+      if (!ALLOWED_ASSETS.has(asset)) {
+        return res.status(400).json({ success: false, message: "Activo no permitido." });
+      }
+
+      const result = process.env.BINANCE_PROXY_URL
+        ? await fetchProxyBinanceBalance(asset)
+        : await fetchDirectBinanceBalance(asset);
+
+      return res.status(200).json(result);
+    } catch (error) {
+      const statusCode = Number(error?.statusCode) || 500;
+      console.error("Error en api/binance-balance.js:", error?.message || error);
+      return res.status(statusCode).json({
+        success: false,
+        message: statusCode === 500
+          ? "No se pudo consultar el saldo en este momento."
+          : "No se pudo validar la solicitud.",
+      });
+    }
+  };
+}
+
+const handler = createHandler();
+module.exports = handler;
+module.exports.createHandler = createHandler;
+module.exports.normalizeBalance = normalizeBalance;
