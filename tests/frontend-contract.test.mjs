@@ -42,6 +42,12 @@ test("modal markup exposes accessible dialog semantics", () => {
   assert.match(html, /id="image-viewer-title"/);
 });
 
+test("the authenticated panel distinguishes personal and global admin history", () => {
+  assert.match(html, /id="admin-history-callout"/);
+  assert.match(html, /data-view="admin-orders"/);
+  assert.match(main, /adminHistoryCallout/);
+});
+
 test("the frontend exposes opt-in push notification controls", () => {
   assert.match(html, /id="push-notification-control"/);
   assert.match(html, /name="fcm-vapid-key" content="[A-Za-z0-9_-]+"/);

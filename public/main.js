@@ -78,6 +78,7 @@ let transactionListenerUnsubscribe = null;
 let adminAccountsUnsubscribe = null;
 let authContainer, appContainer, authFormsSection, registerForm, loginForm, resetPasswordForm, logoutButton, showRegisterButton, showLoginButton, showResetPasswordButton, showLoginFromResetButton;
 let pushNotificationControl, pushNotificationStatus, enablePushNotificationsButton, disablePushNotificationsButton;
+let adminHistoryCallout;
 let registerStatus, loginStatus, resetPasswordStatus;
 let usdtDestinationSaveTimeout = null;
 let vesDestinationSaveTimeout = null;
@@ -244,6 +245,7 @@ function initializeDOM() {
     menuUserEmail = document.getElementById('menu-user-email');
     menuLogoutButton = document.getElementById('menu-logout-button');
     historySection = document.getElementById('history-section');
+    adminHistoryCallout = document.getElementById('admin-history-callout');
     amountLoadingIndicator = document.getElementById('amount-loading-indicator');
     historyLoadMoreButton = document.getElementById('history-load-more-button');
     pushNotificationControl = document.getElementById('push-notification-control');
@@ -290,6 +292,7 @@ async function initializeFirebase() {
                 clearRealtimeListeners();
                 const isAdminUser = ADMIN_UIDS.includes(userId);
                 isCurrentUserAdmin = isAdminUser;
+                if (adminHistoryCallout) adminHistoryCallout.classList.toggle('hidden', !isAdminUser);
                 if (isAdminUser) {
                     await loadMarginConfigOnce();
                     await loadAdminAccountsOnce();
@@ -325,6 +328,7 @@ async function initializeFirebase() {
                 if(userIdContainer) userIdContainer.classList.add('hidden');
                 if (authFormsSection) authFormsSection.classList.remove('hidden');
                 if (pushNotificationControl) pushNotificationControl.classList.add('hidden');
+                if (adminHistoryCallout) adminHistoryCallout.classList.add('hidden');
                 if (loginForm) loginForm.classList.remove('hidden');
                 if (registerForm) registerForm.classList.add('hidden');
                 if (resetPasswordForm) resetPasswordForm.classList.add('hidden');
@@ -2215,7 +2219,8 @@ async function setupAdminTransactionsListener({ append = false } = {}) {
         }
     } catch (error) {
         console.error('Error al cargar transacciones (admin):', error);
-        const missingIndex = typeof error?.message === 'string' && error.message.includes('requires a COLLECTION_GROUP_DESC index');
+        const missingIndex = typeof error?.message === 'string'
+            && /COLLECTION_GROUP.*index|requires.*index/i.test(error.message);
         if (missingIndex) {
             try {
                 const fallbackTransactions = await loadAdminTransactionsWithoutIndexFallback();
