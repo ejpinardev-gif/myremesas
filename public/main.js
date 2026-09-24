@@ -2185,37 +2185,24 @@ async function setupAdminTransactionsListener({ append = false } = {}) {
     if (adminLoadMoreButton) adminLoadMoreButton.disabled = true;
 
     try {
-        const collectedDocs = [];
-        let cursor = adminTransactionsCursor;
-        let exhausted = false;
-
-        while (collectedDocs.length < ADMIN_TRANSACTIONS_PAGE_SIZE && !exhausted) {
-            const constraints = [orderBy('timestamp', 'desc'), limit(ADMIN_TRANSACTIONS_PAGE_SIZE)];
-            if (cursor) constraints.splice(1, 0, startAfter(cursor));
-            const transactionsQuery = query(collectionGroup(db, 'transactions'), ...constraints);
-            const snapshot = await getDocs(transactionsQuery);
-
-            if (snapshot.empty) {
-                exhausted = true;
-                break;
-            }
-
-            cursor = snapshot.docs[snapshot.docs.length - 1] || cursor;
-            const relevantDocs = snapshot.docs.filter(docSnap => docSnap.ref.path.includes(`artifacts/${appId}/`));
-            collectedDocs.push(...relevantDocs);
-
-            if (snapshot.docs.length < ADMIN_TRANSACTIONS_PAGE_SIZE) {
-                exhausted = true;
-            }
-        }
-
-        adminTransactionsCursor = cursor;
-        adminTransactionsHasMore = !exhausted;
-        renderAdminTransactions(collectedDocs.slice(0, ADMIN_TRANSACTIONS_PAGE_SIZE), { append });
-        if (!collectedDocs.length && !append) {
+        // Read a bounded set without a compound orderBy query, then sort locally.
+        // This keeps the admin view functional while Firestore builds indexes.
+        const snapshot = await getDocs(query(collectionGroup(db, 'transactions'), limit(120)));
+        const relevantDocs = snapshot.docs
+            .filter(docSnap => docSnap.ref.path.includes(`artifacts/${appId}/`))
+            .sort((left, right) => {
+                const leftSeconds = left.data().timestamp?.seconds || 0;
+                const rightSeconds = right.data().timestamp?.seconds || 0;
+                return rightSeconds - leftSeconds;
+            });
+        const page = relevantDocs.slice(0, ADMIN_TRANSACTIONS_PAGE_SIZE);
+        adminTransactionsCursor = null;
+        adminTransactionsHasMore = false;
+        renderAdminTransactions(page, { append: false });
+        if (!page.length && !append) {
             setAdminOrdersStatus('No hay órdenes para mostrar.');
         } else {
-            setAdminOrdersStatus(adminTransactionsHasMore ? 'Mostrando órdenes recientes.' : 'Mostrando todas las órdenes cargadas.');
+            setAdminOrdersStatus('Mostrando las órdenes más recientes.');
         }
     } catch (error) {
         console.error('Error al cargar transacciones (admin):', error);
