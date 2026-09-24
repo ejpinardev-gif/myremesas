@@ -10,14 +10,6 @@
     { "src": "/api/binance-balance", "dest": "/api/binance-balance.js" },
     { "src": "/(.*)", "dest": "/public/$1" }
   ],
-  "functions": {
-    "api/rates.js": {
-      "maxDuration": 30
-    },
-    "api/binance-balance.js": {
-      "maxDuration": 10
-    }
-  },
   "headers": [
     {
       "source": "/(.*)",
