@@ -17,110 +17,11 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    function isCurrency(value) {
-      return value is string && value in ['CLP', 'VES', 'USDT', 'WLD'];
-    }
-
-    function isPositiveAmount(value) {
-      return value is number && value > 0 && value <= 1000000000000;
-    }
-
     function isShortString(value, maxLength) {
       return value is string && value.size() > 0 && value.size() <= maxLength;
     }
 
-    function isOptionalShortString(value, maxLength) {
-      return value is string && value.size() <= maxLength;
-    }
-
-    function isAdminDestination(value) {
-      return value is map
-        && value.keys().hasOnly([
-          'id', 'bankName', 'accountHolder', 'rut', 'accountType',
-          'accountNumber', 'email', 'savedAt'
-        ])
-        && value.keys().hasAny(['id'])
-        && value.keys().hasAny(['bankName'])
-        && value.keys().hasAny(['accountHolder'])
-        && value.keys().hasAny(['rut'])
-        && value.keys().hasAny(['accountType'])
-        && value.keys().hasAny(['accountNumber'])
-        && value.keys().hasAny(['email'])
-        && value.keys().hasAny(['savedAt'])
-        && isShortString(value.id, 128)
-        && isShortString(value.bankName, 120)
-        && isShortString(value.accountHolder, 160)
-        && isShortString(value.rut, 64)
-        && isShortString(value.accountType, 80)
-        && isShortString(value.accountNumber, 128)
-        && isShortString(value.email, 320)
-        && value.savedAt == request.time;
-    }
-
-    function isUsdtDestination(value) {
-      return value is map
-        && value.keys().hasOnly(['wallet', 'network', 'notes'])
-        && value.keys().hasAny(['wallet'])
-        && value.keys().hasAny(['network'])
-        && value.keys().hasAny(['notes'])
-        && isShortString(value.wallet, 256)
-        && isShortString(value.network, 80)
-        && isOptionalShortString(value.notes, 500);
-    }
-
-    function isVesDestination(value) {
-      return value is map
-        && value.keys().hasOnly([
-          'beneficiary', 'idNumber', 'bank', 'accountType',
-          'accountNumber', 'notes'
-        ])
-        && value.keys().hasAny(['beneficiary'])
-        && value.keys().hasAny(['idNumber'])
-        && value.keys().hasAny(['bank'])
-        && value.keys().hasAny(['accountType'])
-        && value.keys().hasAny(['accountNumber'])
-        && value.keys().hasAny(['notes'])
-        && isShortString(value.beneficiary, 160)
-        && isShortString(value.idNumber, 64)
-        && isShortString(value.bank, 120)
-        && isShortString(value.accountType, 80)
-        && isShortString(value.accountNumber, 128)
-        && isOptionalShortString(value.notes, 500);
-    }
-
-    function isValidTransactionCreate(data, userId) {
-      return data.keys().hasOnly([
-        'amountSend', 'currencySend', 'amountReceive', 'currencyReceive',
-        'rateApplied', 'timestamp', 'userId', 'status', 'userReceiptUrl',
-        'adminReceiptUrl', 'userEmail', 'userDisplayName',
-        'adminDestinationAccount', 'userUsdtDestination', 'userVesDestination'
-      ])
-        && data.userId == userId
-        && data.status == 'Sin comprobante'
-        && data.timestamp == request.time
-        && data.keys().hasAny(['userEmail'])
-        && data.userEmail == request.auth.token.email
-        && isPositiveAmount(data.amountSend)
-        && isPositiveAmount(data.amountReceive)
-        && isPositiveAmount(data.rateApplied)
-        && isCurrency(data.currencySend)
-        && isCurrency(data.currencyReceive)
-        && data.userReceiptUrl == null
-        && data.adminReceiptUrl == null
-        && (!data.keys().hasAny(['userEmail']) || isShortString(data.userEmail, 320))
-        && (!data.keys().hasAny(['userDisplayName']) || isShortString(data.userDisplayName, 160))
-        && (!data.keys().hasAny(['adminDestinationAccount'])
-          || data.adminDestinationAccount == null
-          || isAdminDestination(data.adminDestinationAccount))
-        && (!data.keys().hasAny(['userUsdtDestination'])
-          || data.userUsdtDestination == null
-          || isUsdtDestination(data.userUsdtDestination))
-        && (!data.keys().hasAny(['userVesDestination'])
-          || data.userVesDestination == null
-          || isVesDestination(data.userVesDestination));
-    }
-
-    function isValidUserTransactionUpdate(before, after, appId, userId, transactionId) {
+    function isValidUserTransactionUpdate(before, after, userId, transactionId) {
       return before.userId == userId
         && after.userId == before.userId
         && after.amountSend == before.amountSend
@@ -184,7 +85,7 @@ service cloud.firestore {
       allow create: if false;
       allow update: if isAdmin()
         || (isOwner(userId)
-          && isValidUserTransactionUpdate(resource.data, request.resource.data, appId, userId, transactionId));
+          && isValidUserTransactionUpdate(resource.data, request.resource.data, userId, transactionId));
       allow delete: if isAdmin();
     }
 
