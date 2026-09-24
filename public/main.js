@@ -298,6 +298,7 @@ async function initializeFirebase() {
                     await signOut(auth);
                 }
                 clearRealtimeListeners();
+                clearAuthFormStatuses();
                 userId = null;
                 isCurrentUserAdmin = false;
                 if (menuUserEmail) menuUserEmail.textContent = 'No autenticado';
@@ -353,6 +354,14 @@ const AUTH_ERROR_MESSAGES = Object.freeze({
 
 function getAuthErrorMessage(error) {
     return AUTH_ERROR_MESSAGES[error?.code] || 'No se pudo completar la operación. Intenta nuevamente.';
+}
+
+function clearAuthFormStatuses() {
+    [loginStatus, registerStatus, resetPasswordStatus].forEach((status) => {
+        if (!status) return;
+        status.textContent = '';
+        status.classList.add('hidden');
+    });
 }
 
 function setAuthFormBusy(form, isBusy, busyLabel = 'Procesando...') {
@@ -440,12 +449,14 @@ function setupAuthEventListeners() {
     }
 
     showRegisterButton?.addEventListener('click', () => {
+        clearAuthFormStatuses();
         loginForm?.classList.add('hidden');
         resetPasswordForm?.classList.add('hidden');
         registerForm?.classList.remove('hidden');
     });
 
     const showLogin = () => {
+        clearAuthFormStatuses();
         registerForm?.classList.add('hidden');
         resetPasswordForm?.classList.add('hidden');
         loginForm?.classList.remove('hidden');
@@ -453,6 +464,7 @@ function setupAuthEventListeners() {
     showLoginButton?.addEventListener('click', showLogin);
     showLoginFromResetButton?.addEventListener('click', showLogin);
     showResetPasswordButton?.addEventListener('click', () => {
+        clearAuthFormStatuses();
         loginForm?.classList.add('hidden');
         registerForm?.classList.add('hidden');
         resetPasswordForm?.classList.remove('hidden');
