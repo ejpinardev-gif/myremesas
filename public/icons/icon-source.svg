@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="MyRemesas">
+  <!--
+    MyRemesas · icono de app (concepto D)
+    Master vector. Los PNG de public/icons salen de este archivo.
+
+    Decision de diseno: sombra ambar unica, del mismo color de la marca, sobre
+    fondo solido. La sombra NO se mezcla con ningun degradado, que es lo que
+    hace que un icono "3D" se ensucie por debajo de 96px.
+
+    Dependencia: el "$" usa Outfit 800 (Google Fonts, ya cargada por la app).
+    Para re-rasterizar hay que tener Outfit disponible; los PNG committeados no
+    dependen de la fuente en runtime.
+
+    Geometria de la orbita: dos arcos de 130 grados en sentidos opuestos sobre
+    un circulo de radio 172, con punta solida tangente al arco.
+  -->
+  <defs>
+    <filter id="lift" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="10" stdDeviation="9" flood-color="#f59e0b" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" fill="#0b0f1a"/>
+
+  <g filter="url(#lift)">
+    <g fill="none" stroke="#f59e0b" stroke-width="20" stroke-linecap="round">
+      <path d="M100.1 183.3 A172 172 0 0 1 411.9 183.3"/>
+      <path d="M411.9 328.7 A172 172 0 0 1 100.1 328.7"/>
+    </g>
+    <g fill="#f59e0b">
+      <polygon points="428.8,219.6 435.5,172.3 388.3,194.3"/>
+      <polygon points="83.2,292.4 76.6,339.7 123.7,317.7"/>
+    </g>
+    <text x="256" y="256" text-anchor="middle" dominant-baseline="central"
+          font-family="Outfit, sans-serif" font-weight="800" font-size="300"
+          fill="#e8930c">$</text>
+  </g>
+</svg>

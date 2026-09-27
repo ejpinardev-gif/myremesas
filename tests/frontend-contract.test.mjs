@@ -99,6 +99,39 @@ test("the checkout locks the quote and blocks confirmation once it expires", () 
   assert.match(main, /clearInterval\(paymentRateTimerId\)/);
 });
 
+test("the app is installable as a PWA with its own icon", () => {
+  assert.match(html, /<link rel="manifest" href="\/site\.webmanifest">/);
+  assert.match(html, /<link rel="apple-touch-icon" href="\/icons\/apple-touch-icon\.png">/);
+  assert.match(html, /<meta name="apple-mobile-web-app-title" content="MyRemesas">/);
+  assert.match(html, /<meta name="theme-color" content="#0b0f1a">/);
+
+  const manifest = JSON.parse(fs.readFileSync("public/site.webmanifest", "utf8"));
+  assert.equal(manifest.short_name, "MyRemesas");
+  assert.equal(manifest.display, "standalone");
+  assert.equal(manifest.start_url, "/");
+  assert.equal(manifest.theme_color, manifest.background_color);
+
+  // Chrome exige un icono de 192 y uno de 512 para ofrecer la instalacion.
+  const sizes = manifest.icons.map(icon => `${icon.sizes} ${icon.purpose}`);
+  assert.ok(sizes.includes("192x192 any"), "falta icono any de 192");
+  assert.ok(sizes.includes("512x512 any"), "falta icono any de 512");
+  assert.ok(sizes.includes("512x512 maskable"), "falta icono maskable de 512");
+
+  for (const icon of manifest.icons) {
+    const file = `public${icon.src}`;
+    assert.equal(fs.existsSync(file), true, `falta el asset ${icon.src}`);
+    const header = fs.readFileSync(file).subarray(0, 24);
+    assert.equal(header.toString("hex", 0, 8), "89504e470d0a1a0a", `${icon.src} no es un PNG valido`);
+    const width = header.readUInt32BE(16);
+    const height = header.readUInt32BE(20);
+    const [expected] = icon.sizes.split("x").map(Number);
+    assert.equal(width, expected, `ancho incorrecto en ${icon.src}`);
+    assert.equal(height, expected, `alto incorrecto en ${icon.src}`);
+  }
+  assert.equal(fs.existsSync("public/icons/apple-touch-icon.png"), true);
+  assert.equal(fs.existsSync("public/icons/icon-source.svg"), true);
+});
+
 test("order cards show the lifecycle stepper with a next-step hint", () => {
   assert.match(html, /\.order-stepper \{/);
   assert.match(html, /\.order-step\.is-active \{/);

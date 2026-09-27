@@ -28,6 +28,16 @@ Users can opt in to browser push notifications from the authenticated panel. The
 
 The public VAPID key is configured in `public/index.html`. Browser notification permission is always user-controlled and must be granted before a device can receive messages.
 
+## App icon and installability
+
+`public/icons/icon-source.svg` is the master for the app icon: a dollar sign inside two counter-rotating arcs, with a single amber drop shadow over a solid ink background. The shadow deliberately shares the mark's colour and never sits on a gradient, which is what keeps the icon legible below 96px.
+
+The shipped PNGs are rasterised from that SVG at 192, 512, maskable 192/512 and apple-touch 180. The maskable variants scale the mark to 70% so it survives an aggressive launcher mask. Rasterising requires the `Outfit` 800 face, which is the one the app already loads; the committed PNGs have no runtime font dependency.
+
+`public/site.webmanifest` is what makes the app installable. Chrome requires at least a 192 and a 512 icon before it offers "Add to Home screen", and iOS uses `apple-touch-icon` plus `apple-mobile-web-app-title`.
+
+If you change the markup in `public/index.html` or `public/main.js`, run `npm run build` and commit the result: Vercel serves the committed Tailwind output and never rebuilds it.
+
 ## Local verification
 
 ```bash
