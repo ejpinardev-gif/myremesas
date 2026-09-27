@@ -74,3 +74,36 @@ test("orders are created through the trusted function, not directly from the cli
   assert.match(main, /cloudfunctions\.net\/createOrder/);
   assert.doesNotMatch(main, /addDoc\(userTransactionsRef/);
 });
+
+test("the checkout walks the user through three labelled steps", () => {
+  assert.match(html, /id="payment-stepper"/);
+  for (const step of ["1", "2", "3"]) {
+    assert.match(html, new RegExp(`data-payment-step="${step}"[^>]*aria-label=`));
+    assert.match(html, new RegExp(`data-payment-marker="${step}"`));
+  }
+  assert.match(html, /id="payment-next-button"/);
+  assert.match(html, /id="payment-back-button"/);
+  assert.match(html, /id="payment-step-hint"/);
+  assert.match(main, /function renderPaymentStep\(step\)/);
+  assert.match(main, /PAYMENT_STEP_HINTS/);
+});
+
+test("the checkout locks the quote and blocks confirmation once it expires", () => {
+  assert.match(html, /id="payment-rate-lock"/);
+  assert.match(html, /id="payment-rate-timer"/);
+  assert.match(html, /id="refresh-payment-rate"/);
+  assert.match(main, /const PAYMENT_RATE_VALIDITY_MS = 60_000;/);
+  assert.match(main, /function capturePaymentRateQuote\(\)/);
+  assert.match(main, /function isPaymentRateExpired\(\)/);
+  assert.match(main, /La cotización expiró\. Actualiza la tasa antes de confirmar\./);
+  assert.match(main, /clearInterval\(paymentRateTimerId\)/);
+});
+
+test("order cards show the lifecycle stepper with a next-step hint", () => {
+  assert.match(html, /\.order-stepper \{/);
+  assert.match(html, /\.order-step\.is-active \{/);
+  assert.match(main, /function buildOrderStepperMarkup\(status\)/);
+  assert.match(main, /function getOrderLifecycleIndex\(status\)/);
+  assert.match(main, /order-stepper/);
+  assert.match(main, /ORDER_STATUS_HINTS/);
+});

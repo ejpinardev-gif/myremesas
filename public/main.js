@@ -29,6 +29,11 @@ const CREATE_ORDER_API_URL = 'https://us-central1-studio-7601782447-44d81.cloudf
 const FCM_SERVICE_WORKER_PATH = '/firebase-messaging-sw.js';
 const FCM_VAPID_KEY = document.querySelector('meta[name="fcm-vapid-key"]')?.content?.trim() || '';
 
+// Cotización: el precio se congela al abrir el checkout y caduca para que el
+// usuario nunca confirme contra una tasa vieja sin saberlo.
+const PAYMENT_RATE_VALIDITY_MS = 60_000;
+const PAYMENT_RATE_DRIFT_THRESHOLD = 0.005;
+
 // Variables Globales de Firebase (provistas por el entorno)
 const appId = "1:775892034675:web:98ed2724bcaff2ed427606";
 const firebaseConfig = {"apiKey":"AIzaSyCnXU8XU7ZzA_12CDaYaY9W2rWBmkGLB-g","authDomain":"studio-7601782447-44d81.firebaseapp.com","projectId":"studio-7601782447-44d81","storageBucket":"studio-7601782447-44d81.firebasestorage.app","messagingSenderId":"775892034675","appId":"1:775892034675:web:98ed2724bcaff2ed427606"};
@@ -84,6 +89,7 @@ let adminPendingColumnCount, adminCompletedColumnCount, adminCancelledColumnCoun
 let registerStatus, loginStatus, resetPasswordStatus;
 let usdtDestinationSaveTimeout = null;
 let vesDestinationSaveTimeout = null;
+let paymentBackButton, paymentNextButton, paymentStepHint, paymentRateLock, paymentRateLabel, paymentRateTimer, refreshPaymentRateButton, paymentStep3Summary;
 let ratesFetchDebounceTimeout = null;
 let isFetchingDynamicRates = false;
 let activeView = null;
@@ -95,6 +101,10 @@ let adminTransactionsHasMore = false;
 let userTransactionsCursor = null;
 let userTransactionsHasMore = false;
 let userTransactionsCache = [];
+let currentPaymentStep = 1;
+let paymentRateDeadline = 0;
+let paymentRateTimerId = null;
+let paymentQuoteSnapshot = null;
 const ADMIN_TRANSACTIONS_PAGE_SIZE = 20;
 const USER_TRANSACTIONS_PAGE_SIZE = 20;
 const LIVE_RATES_CACHE_KEY = 'myremesas-live-rates-cache';
@@ -181,6 +191,14 @@ function initializeDOM() {
     accountStatus = document.getElementById('account-status');
     paymentModal = document.getElementById('payment-details-modal');
     closeModalButton = document.getElementById('close-modal-button');
+    paymentBackButton = document.getElementById('payment-back-button');
+    paymentNextButton = document.getElementById('payment-next-button');
+    paymentStepHint = document.getElementById('payment-step-hint');
+    paymentRateLock = document.getElementById('payment-rate-lock');
+    paymentRateLabel = document.getElementById('payment-rate-label');
+    paymentRateTimer = document.getElementById('payment-rate-timer');
+    refreshPaymentRateButton = document.getElementById('refresh-payment-rate');
+    paymentStep3Summary = document.getElementById('payment-step3-summary');
     modalAmountSend = document.getElementById('modal-amount-send');
     modalAmountReceive = document.getElementById('modal-amount-receive');
     noAccountsMessage = document.getElementById('no-accounts-message');
@@ -1833,6 +1851,50 @@ function canCancelTransaction(status) {
     return status === 'Sin comprobante' || status === 'Pendiente';
 }
 
+// Ciclo de vida de la orden. El badge dice "dónde está"; el stepper dice "qué sigue".
+const ORDER_LIFECYCLE_STEPS = ['Creada', 'Comprobante', 'En revisión', 'Completada'];
+
+const ORDER_STATUS_HINTS = {
+    'Sin comprobante': 'Sube tu comprobante para enviar la orden a revisión.',
+    'Pendiente': 'Estamos revisando tu comprobante. Te avisaremos cuando avance.',
+    'Completado': 'Orden completada. El pago fue liberado.',
+    'Cancelada': 'Esta orden fue cancelada y ya no admite cambios.',
+};
+
+function getOrderLifecycleIndex(status) {
+    if (status === 'Completado') return 3;
+    if (status === 'Pendiente') return 2;
+    return 0;
+}
+
+function buildOrderStepperMarkup(status) {
+    const isCancelled = status === 'Cancelada';
+    const activeIndex = getOrderLifecycleIndex(status);
+    const hint = ORDER_STATUS_HINTS[status] || 'El estado de la orden aparecerá aquí.';
+
+    const markers = ORDER_LIFECYCLE_STEPS.map((label, index) => {
+        let stateClass = '';
+        let marker = String(index + 1);
+        if (isCancelled) {
+            if (index === 0) {
+                stateClass = 'is-done';
+                marker = '✓';
+            } else if (index === 2) {
+                stateClass = 'is-cancelled';
+                marker = '✕';
+            }
+        } else if (index < activeIndex) {
+            stateClass = 'is-done';
+            marker = '✓';
+        } else if (index === activeIndex) {
+            stateClass = 'is-active';
+        }
+        return `<li class="order-step ${stateClass}"><span class="order-step-dot">${marker}</span><span>${escapeHtml(label)}</span></li>`;
+    }).join('');
+
+    return `<ol class="order-stepper" aria-label="Estado de la orden">${markers}</ol><p class="order-next-hint">${escapeHtml(hint)}</p>`;
+}
+
 function renderTransactionHistory(transactions) {
     historyContainer.innerHTML = '';
     if (transactions.length === 0) {
@@ -1879,6 +1941,7 @@ function renderTransactionHistory(transactions) {
                 <span class="inline-flex items-center flex-shrink-0 whitespace-nowrap px-2 py-0.5 text-xs font-semibold rounded-full ${badgeClasses}">${escapeHtml(tx.status || 'N/A')}</span>
             </div>
             <p class="m3-muted-chip">Tasa ${tx.rateApplied ? formatRounded(tx.rateApplied, 4) : 'N/A'}</p>
+            ${buildOrderStepperMarkup(tx.status)}
             ${destinationDetailsMarkup ? `<div class="pt-2 border-t border-gray-200 space-y-2">${destinationDetailsMarkup}</div>` : ''}
             ${receiptActionsMarkup}
             ${userUploadMarkup}
@@ -2001,6 +2064,222 @@ async function handleHistoryContainerClick(event) {
     }
 }
 
+// ---------------------------------------------------------------- Checkout
+// El checkout se recorre en tres pasos (resumen, destino, confirmación) para
+// que el usuario nunca confirme contra una cotización vieja ni sin destino.
+
+const PAYMENT_STEP_HINTS = {
+    1: 'Revisa el monto y la tasa. En el siguiente paso completas los datos de destino.',
+    2: 'Completa los datos de destino para poder confirmar la orden.',
+    3: 'Una vez realizada la transferencia, sube tu comprobante para confirmar la orden.',
+};
+
+function getPaymentStepSections() {
+    return paymentModal ? [...paymentModal.querySelectorAll('[data-payment-step]')] : [];
+}
+
+function getPaymentStepMarkers() {
+    return paymentModal ? [...paymentModal.querySelectorAll('[data-payment-marker]')] : [];
+}
+
+function formatPaymentRateLabel(currencySend, currencyReceive, rate) {
+    if (!isPositiveFiniteNumber(rate)) return 'Tasa no disponible';
+    if (currencySend === currencyReceive) return 'Intercambio 1:1';
+    if (currencySend === 'CLP' && currencyReceive === 'USDT') {
+        return `1 USDT = ${formatRounded(1 / rate, 2)} CLP`;
+    }
+    return `1 ${currencySend} = ${formatRounded(rate, currencyReceive === 'WLD' ? 8 : 4)} ${currencyReceive}`;
+}
+
+function formatRateCountdown(totalSeconds) {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = String(totalSeconds % 60).padStart(2, '0');
+    return `${minutes}:${seconds}`;
+}
+
+function getPaymentRateSecondsLeft() {
+    if (!paymentRateDeadline) return 0;
+    return Math.max(0, Math.ceil((paymentRateDeadline - Date.now()) / 1000));
+}
+
+function isPaymentRateExpired() {
+    return Boolean(paymentRateDeadline) && getPaymentRateSecondsLeft() <= 0;
+}
+
+function stopPaymentRateCountdown() {
+    if (paymentRateTimerId) {
+        window.clearInterval(paymentRateTimerId);
+        paymentRateTimerId = null;
+    }
+}
+
+function updatePaymentRateLockView() {
+    if (!paymentRateLock) return;
+    const expired = isPaymentRateExpired();
+    paymentRateLock.classList.toggle('is-expired', expired);
+    if (paymentQuoteSnapshot) {
+        paymentRateLabel.textContent = formatPaymentRateLabel(
+            paymentQuoteSnapshot.currencySend,
+            paymentQuoteSnapshot.currencyReceive,
+            paymentQuoteSnapshot.rate,
+        );
+    }
+    if (paymentRateTimer) {
+        paymentRateTimer.textContent = expired
+            ? 'Tasa expirada'
+            : `Válida por ${formatRateCountdown(getPaymentRateSecondsLeft())}`;
+    }
+    refreshPaymentRateButton?.classList.toggle('hidden', !expired);
+    if (paymentNextButton) {
+        paymentNextButton.disabled = expired && currentPaymentStep < 3;
+    }
+}
+
+function startPaymentRateCountdown() {
+    stopPaymentRateCountdown();
+    updatePaymentRateLockView();
+    paymentRateTimerId = window.setInterval(() => {
+        updatePaymentRateLockView();
+        if (isPaymentRateExpired()) stopPaymentRateCountdown();
+    }, 1000);
+}
+
+// Congela la cotización visible y abre su ventana de validez.
+function capturePaymentRateQuote() {
+    const draft = currentTransactionDraft;
+    const currencySend = draft?.currencySend || currencySendSelect.value;
+    const currencyReceive = draft?.currencyReceive || currencyReceiveSelect.value;
+    const parsedAmountSend = parseFloat(amountSendInput.value);
+    const amountSend = draft?.amountSend ?? (isPositiveFiniteNumber(parsedAmountSend) ? parsedAmountSend : 0);
+    const rate = calculateFullRatesInternal()[`${currencySend}_to_${currencyReceive}`] || 0;
+    const previousAmount = draft?.amountReceive;
+    const nextAmount = amountSend * rate;
+
+    paymentQuoteSnapshot = {
+        rate,
+        amountSend,
+        amountReceive: nextAmount,
+        currencySend,
+        currencyReceive,
+        at: Date.now(),
+    };
+    if (draft) draft.amountReceive = nextAmount;
+    if (modalAmountReceive) modalAmountReceive.textContent = formatCurrency(nextAmount, currencyReceive);
+    paymentRateDeadline = Date.now() + PAYMENT_RATE_VALIDITY_MS;
+    updatePaymentRateLockView();
+    startPaymentRateCountdown();
+    updatePaymentStep3Summary();
+    return { previousAmount, nextAmount, currencyReceive };
+}
+
+function updatePaymentStep3Summary() {
+    if (!paymentStep3Summary) return;
+    const draft = currentTransactionDraft;
+    if (!draft) {
+        paymentStep3Summary.textContent = '—';
+        return;
+    }
+    const parts = [
+        `${formatCurrency(draft.amountSend, draft.currencySend)} → ${formatCurrency(draft.amountReceive, draft.currencyReceive)}`,
+    ];
+    if (draft.currencySend === 'CLP') {
+        const account = adminAccounts.find(acc => acc.id === adminAccountSelect?.value);
+        if (account) parts.push(`Transferir a: ${account.bankName} - ${account.accountType}`);
+    }
+    if (draft.currencyReceive === 'USDT') {
+        const wallet = usdtWalletInput?.value.trim();
+        if (wallet) parts.push(`Wallet: ${wallet}`);
+    }
+    if (draft.currencyReceive === 'VES') {
+        const beneficiary = vesBeneficiaryInput?.value.trim();
+        if (beneficiary) parts.push(`Beneficiario: ${beneficiary}`);
+    }
+    paymentStep3Summary.textContent = parts.join(' · ');
+}
+
+function renderPaymentStep(step) {
+    const safeStep = Math.min(3, Math.max(1, step));
+    currentPaymentStep = safeStep;
+    getPaymentStepSections().forEach(section => {
+        section.classList.toggle('hidden', section.dataset.paymentStep !== String(safeStep));
+    });
+    getPaymentStepMarkers().forEach(marker => {
+        const markerStep = Number(marker.dataset.paymentMarker);
+        marker.classList.toggle('is-active', markerStep === safeStep);
+        marker.classList.toggle('is-done', markerStep < safeStep);
+        const dot = marker.querySelector('.pay-step-dot');
+        if (dot) dot.textContent = markerStep < safeStep ? '✓' : String(markerStep);
+    });
+    paymentBackButton?.classList.toggle('hidden', safeStep === 1);
+    if (paymentNextButton) {
+        paymentNextButton.classList.toggle('hidden', safeStep === 3);
+        paymentNextButton.textContent = safeStep === 1 ? 'Continuar' : 'Revisar y confirmar';
+    }
+    if (paymentStepHint) {
+        paymentStepHint.className = 'text-xs text-slate-500 mt-4 text-center';
+        paymentStepHint.textContent = PAYMENT_STEP_HINTS[safeStep] || '';
+    }
+    if (safeStep === 3) updatePaymentStep3Summary();
+    updatePaymentRateLockView();
+    const activeSection = getPaymentStepSections().find(section => section.dataset.paymentStep === String(safeStep));
+    requestAnimationFrame(() => activeSection?.focus?.());
+}
+
+function handlePaymentNextStep() {
+    if (isPaymentRateExpired()) {
+        updatePaymentRateLockView();
+        return;
+    }
+    if (currentPaymentStep === 1) {
+        renderPaymentStep(2);
+        return;
+    }
+    if (currentPaymentStep === 2) {
+        syncCurrentTransactionDraftFromUI();
+        const validationError = getCurrentTransactionValidationError();
+        if (validationError) {
+            if (paymentStepHint) {
+                paymentStepHint.className = 'text-xs text-red-600 mt-4 text-center font-semibold';
+                paymentStepHint.textContent = validationError;
+            }
+            return;
+        }
+        renderPaymentStep(3);
+    }
+}
+
+function handlePaymentBackStep() {
+    if (currentPaymentStep > 1) renderPaymentStep(currentPaymentStep - 1);
+}
+
+async function handleRefreshPaymentRate() {
+    if (!refreshPaymentRateButton) return;
+    refreshPaymentRateButton.disabled = true;
+    refreshPaymentRateButton.textContent = 'Actualizando...';
+    try {
+        await fetchDynamicRates();
+        const { previousAmount, nextAmount } = capturePaymentRateQuote();
+        const drifted = isPositiveFiniteNumber(previousAmount)
+            && previousAmount > 0
+            && Math.abs(nextAmount - previousAmount) / previousAmount > PAYMENT_RATE_DRIFT_THRESHOLD;
+        if (paymentStepHint) {
+            paymentStepHint.className = drifted ? 'text-xs text-amber-700 mt-4 text-center font-semibold' : 'text-xs text-slate-500 mt-4 text-center';
+            paymentStepHint.textContent = drifted
+                ? `La tasa de mercado cambió. Ahora recibirías ${formatCurrency(nextAmount, paymentQuoteSnapshot.currencyReceive)}.`
+                : PAYMENT_STEP_HINTS[currentPaymentStep] || '';
+        }
+    } catch (error) {
+        console.error('Error al actualizar la tasa:', error);
+        if (paymentStepHint) {
+            paymentStepHint.className = 'text-xs text-red-600 mt-4 text-center font-semibold';
+            paymentStepHint.textContent = 'No pudimos actualizar la tasa. Intenta de nuevo.';
+        }
+    } finally {
+        refreshPaymentRateButton.disabled = false;
+        refreshPaymentRateButton.textContent = 'Actualizar tasa';
+    }
+}
+
 async function showPaymentModal() {
     const amountSend = parseFloat(amountSendInput.value);
     const currencySend = currencySendSelect.value;
@@ -2075,10 +2354,13 @@ async function showPaymentModal() {
         noAccountsMessage.innerHTML = '<p class="text-center text-gray-600 p-4">La dirección de la Wallet será proporcionada por el administrador.</p>';
     }
     syncCurrentTransactionDraftFromUI();
-    openModalElement(paymentModal, adminAccountSelect?.value ? uploadReceiptButton : adminAccountSelect);
+    capturePaymentRateQuote();
+    renderPaymentStep(1);
+    openModalElement(paymentModal, getPaymentStepSections()[0] || paymentNextButton);
 }
 
 function closePaymentModal() {
+    stopPaymentRateCountdown();
     closeModalElement(paymentModal);
 }
 
@@ -2117,6 +2399,12 @@ async function handleUserReceiptUpload(event) {
         receiptUploadStatus.className = 'text-xs text-red-600';
         return;
     }
+    if (isPaymentRateExpired()) {
+        updatePaymentRateLockView();
+        receiptUploadStatus.textContent = 'La cotización expiró. Actualiza la tasa antes de confirmar.';
+        receiptUploadStatus.className = 'text-xs text-red-600';
+        return;
+    }
     const file = receiptUploadInput.files?.[0];
     if (!file) {
         receiptUploadStatus.textContent = 'Selecciona un archivo.';
@@ -2134,6 +2422,7 @@ async function handleUserReceiptUpload(event) {
         receiptUploadStatus.textContent = 'Subiendo comprobante...';
         receiptUploadStatus.className = 'text-xs text-gray-500';
         syncCurrentTransactionDraftFromUI();
+        let rateDrifted = false;
         if (!currentTransactionRef || !currentTransactionPath) {
             const transactionRecord = await recordTransaction(
                 currentTransactionDraft.amountSend,
@@ -2148,7 +2437,19 @@ async function handleUserReceiptUpload(event) {
             currentTransactionId = transactionRecord.id;
             currentTransactionPath = transactionRecord.path;
             currentTransactionRef = transactionRecord.ref;
-            currentTransactionDraft.amountReceive = transactionRecord.amountReceive;
+            const quotedAmount = paymentQuoteSnapshot?.amountReceive;
+            const appliedAmount = transactionRecord.amountReceive;
+            rateDrifted = Boolean(isPositiveFiniteNumber(quotedAmount)
+                && quotedAmount > 0
+                && isPositiveFiniteNumber(appliedAmount)
+                && Math.abs(appliedAmount - quotedAmount) / quotedAmount > PAYMENT_RATE_DRIFT_THRESHOLD);
+            currentTransactionDraft.amountReceive = appliedAmount;
+            if (rateDrifted) {
+                console.info('Tasa final aplicada por el servidor distinta a la cotizada en pantalla.', {
+                    quotedAmount,
+                    appliedAmount,
+                });
+            }
         }
         const storagePath = `${currentTransactionPath}/receipts/user/${Date.now()}-${sanitizeReceiptFileName(file.name)}`;
         const fileRef = storageRef(storage, storagePath);
@@ -2159,7 +2460,10 @@ async function handleUserReceiptUpload(event) {
             status: 'Pendiente',
             userReceiptUploadedAt: serverTimestamp(),
         });
-        receiptUploadStatus.textContent = 'Comprobante subido. Tu orden está pendiente de revisión.';
+        const finalRateMessage = rateDrifted
+            ? ` El monto final quedó en ${formatCurrency(currentTransactionDraft.amountReceive, currentTransactionDraft.currencyReceive)} con la tasa de mercado del momento.`
+            : '';
+        receiptUploadStatus.textContent = `Comprobante subido. Tu orden está pendiente de revisión.${finalRateMessage}`;
         receiptUploadStatus.className = 'text-xs text-green-600';
     } catch (error) {
         console.error('Error al subir comprobante:', error);
@@ -2368,6 +2672,7 @@ function createAdminTransactionCard(tx) {
             </div>
             ${tx.rateApplied ? createCopyRow('Tasa aplicada', formatRounded(tx.rateApplied, 4)) : ''}
         </div>
+        ${buildOrderStepperMarkup(tx.status)}
         ${destinationDetailsMarkup ? `<div class="border-t border-dashed border-slate-200 pt-3 space-y-2">${destinationDetailsMarkup}</div>` : ''}
         <div class="space-y-2 text-xs text-slate-600">
             ${userReceiptSection}
@@ -2797,7 +3102,10 @@ function registerStaticEventListeners() {
     if (paymentButton) paymentButton.addEventListener('click', showPaymentModal);
     const shareQuoteButton = document.getElementById('share-quote-button');
     if (shareQuoteButton) shareQuoteButton.addEventListener('click', shareQuote);
-    if (closeModalButton) closeModalButton.addEventListener('click', closePaymentModal);
+        if (closeModalButton) closeModalButton.addEventListener('click', closePaymentModal);
+    if (paymentNextButton) paymentNextButton.addEventListener('click', handlePaymentNextStep);
+    if (paymentBackButton) paymentBackButton.addEventListener('click', handlePaymentBackStep);
+    if (refreshPaymentRateButton) refreshPaymentRateButton.addEventListener('click', handleRefreshPaymentRate);
     if (enablePushNotificationsButton) {
         enablePushNotificationsButton.addEventListener('click', () => {
             requestPushNotifications().catch((error) => console.error('Error al activar notificaciones:', error));

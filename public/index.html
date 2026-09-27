@@ -734,6 +734,231 @@
             font-variant-numeric: tabular-nums;
         }
 
+        /* ---------- Stepper de checkout ---------- */
+
+        .pay-stepper {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.4rem;
+            margin: 0 0 1.1rem;
+        }
+
+        .pay-step-marker {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.55rem 0.6rem;
+            border-radius: 0.75rem;
+            background: #f7f6f3;
+            border: 1px solid transparent;
+            color: var(--ink-muted);
+            font-size: 0.72rem;
+            font-weight: 700;
+            min-width: 0;
+        }
+
+        .pay-step-marker span:last-child {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .pay-step-dot {
+            display: inline-grid;
+            place-items: center;
+            width: 1.35rem;
+            height: 1.35rem;
+            flex-shrink: 0;
+            border-radius: 999px;
+            background: #e7e5e4;
+            color: #78716c;
+            font-size: 0.7rem;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .pay-step-marker.is-active {
+            background: #fffbeb;
+            border-color: rgba(217, 119, 6, 0.28);
+            color: var(--accent-strong);
+        }
+
+        .pay-step-marker.is-active .pay-step-dot {
+            background: var(--accent);
+            color: #ffffff;
+        }
+
+        .pay-step-marker.is-done {
+            color: #047857;
+        }
+
+        .pay-step-marker.is-done .pay-step-dot {
+            background: #d1fae5;
+            color: #047857;
+        }
+
+        .pay-step {
+            animation: pay-step-enter 240ms ease both;
+        }
+
+        @keyframes pay-step-enter {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .pay-nav {
+            position: sticky;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.6rem;
+            margin-top: 1.1rem;
+            padding-top: 0.85rem;
+            background: var(--surface);
+            border-top: 1px solid var(--line);
+        }
+
+        /* ---------- Bloqueo de tasa ---------- */
+
+        .rate-lock {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.6rem;
+            margin: 1.1rem 0;
+            padding: 0.7rem 0.85rem;
+            border-radius: 0.85rem;
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(217, 119, 6, 0.24);
+        }
+
+        .rate-lock-timer {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--accent-strong);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .rate-lock.is-expired {
+            border-color: rgba(220, 38, 38, 0.35);
+            background: rgba(254, 242, 242, 0.85);
+        }
+
+        .rate-lock.is-expired .rate-lock-timer {
+            color: #b91c1c;
+        }
+
+        /* ---------- Stepper de ciclo de vida ---------- */
+
+        .order-stepper {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.15rem;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .order-step {
+            position: relative;
+            flex: 1 1 0;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.3rem;
+            text-align: center;
+            color: var(--ink-muted);
+            font-size: 0.62rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .order-step::before {
+            content: "";
+            position: absolute;
+            top: 0.62rem;
+            left: -50%;
+            width: 100%;
+            height: 2px;
+            background: #e7e5e4;
+        }
+
+        .order-step:first-child::before {
+            display: none;
+        }
+
+        .order-step-dot {
+            position: relative;
+            z-index: 1;
+            display: inline-grid;
+            place-items: center;
+            width: 1.25rem;
+            height: 1.25rem;
+            border-radius: 999px;
+            background: #ffffff;
+            border: 2px solid #e7e5e4;
+            color: var(--ink-muted);
+            font-size: 0.62rem;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .order-step span:last-child {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 100%;
+        }
+
+        .order-step.is-done {
+            color: #047857;
+        }
+
+        .order-step.is-done::before,
+        .order-step.is-active::before {
+            background: #6ee7b7;
+        }
+
+        .order-step.is-done .order-step-dot {
+            background: #d1fae5;
+            border-color: #6ee7b7;
+            color: #047857;
+        }
+
+        .order-step.is-active {
+            color: var(--accent-strong);
+        }
+
+        .order-step.is-active .order-step-dot {
+            border-color: var(--accent);
+            color: var(--accent-strong);
+            box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
+        }
+
+        .order-step.is-cancelled {
+            color: #b91c1c;
+        }
+
+        .order-step.is-cancelled::before {
+            background: #fecaca;
+        }
+
+        .order-step.is-cancelled .order-step-dot {
+            border-color: #ef4444;
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+
+        .order-next-hint {
+            margin-top: 0.55rem;
+            font-size: 0.72rem;
+            color: var(--ink-soft);
+        }
+
         .m3-result-card {
             margin-top: 1.4rem;
             padding: 1.3rem 1.25rem;
@@ -1290,6 +1515,35 @@
 
             .admin-metrics-grid {
                 grid-template-columns: 1fr;
+            }
+
+            .pay-stepper {
+                gap: 0.25rem;
+            }
+
+            .pay-step-marker {
+                flex-direction: column;
+                gap: 0.3rem;
+                padding: 0.45rem 0.3rem;
+                font-size: 0.62rem;
+                text-align: center;
+            }
+
+            .pay-step-marker span:last-child {
+                white-space: normal;
+            }
+
+            .order-step {
+                font-size: 0.56rem;
+            }
+
+            .order-step span:last-child {
+                white-space: normal;
+                line-height: 1.15;
+            }
+
+            .pay-nav {
+                flex-wrap: wrap;
             }
 
             .m3-result-card {
@@ -1991,14 +2245,34 @@
                 </button>
             </div>
 
-            <!-- Monto a Transferir (Resumen) -->
-            <div class="p-4 mb-5 rounded-2xl bg-amber-50 border border-amber-200">
-                <p class="text-xs font-bold uppercase tracking-wide text-amber-700">Monto exacto a transferir (origen)</p>
-                <p id="modal-amount-send" class="text-3xl font-extrabold text-gray-900 mt-1 money">CLP 0.00</p>
-                <p class="text-xs text-amber-700 mt-2">Usted va a recibir: <span id="modal-amount-receive" class="font-semibold">VES 0.00</span></p>
+            <ol class="pay-stepper" id="payment-stepper" aria-label="Progreso de la orden">
+                <li class="pay-step-marker is-active" data-payment-marker="1"><span class="pay-step-dot">1</span><span>Resumen</span></li>
+                <li class="pay-step-marker" data-payment-marker="2"><span class="pay-step-dot">2</span><span>Destino</span></li>
+                <li class="pay-step-marker" data-payment-marker="3"><span class="pay-step-dot">3</span><span>Confirmar</span></li>
+            </ol>
+
+            <div class="rate-lock" id="payment-rate-lock">
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-wide text-amber-700">Tasa de cambio</p>
+                    <p id="payment-rate-label" class="text-sm text-gray-900 mt-1 font-semibold">—</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="rate-lock-timer" id="payment-rate-timer" role="timer" aria-live="off">Válida por 60s</span>
+                    <button type="button" id="refresh-payment-rate" class="btn btn-outline btn-sm hidden">Actualizar tasa</button>
+                </div>
             </div>
 
-            <!-- Datos de la Cuenta de Destino (Admin) -->
+            <!-- PASO 1: RESUMEN -->
+            <section class="pay-step" data-payment-step="1" tabindex="-1" aria-label="Resumen de la orden">
+                <div class="p-4 rounded-2xl bg-amber-50 border border-amber-200">
+                    <p class="text-xs font-bold uppercase tracking-wide text-amber-700">Monto exacto a transferir (origen)</p>
+                    <p id="modal-amount-send" class="text-3xl font-extrabold text-gray-900 mt-1 money">CLP 0.00</p>
+                    <p class="text-xs text-amber-700 mt-2">Usted va a recibir: <span id="modal-amount-receive" class="font-semibold">VES 0.00</span></p>
+                </div>
+            </section>
+
+            <!-- PASO 2: DESTINO -->
+            <section class="pay-step hidden" data-payment-step="2" tabindex="-1" aria-label="Datos de destino">
             <div class="soft-panel p-4 space-y-4">
                 <div>
                     <h3 class="text-base font-bold text-gray-900 mb-3">Cuentas disponibles para transferencia (<span id="modal-transfer-currency">CLP</span>)</h3>
@@ -2052,6 +2326,17 @@
                         <input id="usdt-notes-input" type="text" class="field-control field-control-sm" placeholder="Información extra, si aplica" maxlength="500">
                     </div>
 
+                </div>
+                </div>
+            </section>
+
+            <!-- PASO 3: CONFIRMAR -->
+            <section class="pay-step hidden" data-payment-step="3" tabindex="-1" aria-label="Confirmar orden y subir comprobante">
+                <div class="soft-panel p-4 space-y-4">
+                    <div class="rounded-2xl bg-slate-50 border border-slate-200 p-3">
+                        <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Vas a transferir</p>
+                        <p id="payment-step3-summary" class="text-sm font-semibold text-gray-900 mt-1">—</p>
+                    </div>
                     <div class="space-y-2 bg-white border border-slate-200 rounded-2xl p-3">
                         <h4 class="text-sm font-semibold text-gray-900">Subir comprobante y confirmar orden</h4>
                         <p class="text-xs text-slate-500">Sube el comprobante de tu transferencia para validar la operación y continuar con el pago.</p>
@@ -2069,13 +2354,15 @@
                         </a>
                     </div>
                 </div>
+            </section>
+
+            <p id="payment-step-hint" class="text-xs text-slate-500 mt-4 text-center">Una vez realizada la transferencia, sube tu comprobante para confirmar la orden.</p>
+
+            <div class="pay-nav">
+                <button id="payment-back-button" type="button" class="btn btn-outline btn-md hidden">Atrás</button>
+                <button id="close-modal-button" type="button" class="btn btn-ghost btn-md">Cerrar</button>
+                <button id="payment-next-button" type="button" class="btn btn-primary btn-md ml-auto">Continuar</button>
             </div>
-
-            <p class="text-xs text-slate-500 mt-4 text-center">Una vez realizada la transferencia, sube tu comprobante para confirmar la orden. Si lo prefieres, también puedes compartirlo por WhatsApp (+56 9 3007 2631).</p>
-
-            <button id="close-modal-button" class="btn btn-secondary btn-lg w-full mt-5">
-                Entendido / Cerrar
-            </button>
 
         </div>
     </div>
