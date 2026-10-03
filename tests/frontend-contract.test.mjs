@@ -35,11 +35,12 @@ test("the page exposes one main landmark", () => {
 });
 
 test("modal markup exposes accessible dialog semantics", () => {
-  for (const id of ["payment-details-modal", "image-viewer-modal", "confirm-modal"]) {
+  for (const id of ["payment-details-modal", "image-viewer-modal", "confirm-modal", "admin-user-detail-modal"]) {
     assert.match(html, new RegExp(`id="${id}"[^>]*aria-modal="true"`));
   }
   assert.match(html, /id="payment-modal-title"/);
   assert.match(html, /id="image-viewer-title"/);
+  assert.match(html, /id="admin-user-detail-title"/);
 });
 
 test("the authenticated panel distinguishes personal and global admin history", () => {
@@ -140,3 +141,32 @@ test("order cards show the lifecycle stepper with a next-step hint", () => {
   assert.match(main, /order-stepper/);
   assert.match(main, /ORDER_STATUS_HINTS/);
 });
+
+test("the admin panel provides customer registry and user order history", () => {
+  assert.match(html, /data-view="admin-users"/);
+  assert.match(html, /id="admin-users-section"/);
+  assert.match(html, /data-view-panel="admin-users"/);
+  assert.match(html, /id="admin-users-status"/);
+  assert.match(html, /id="admin-refresh-users-btn"/);
+  assert.match(html, /id="admin-total-users-count"/);
+  assert.match(html, /id="admin-users-with-orders-count"/);
+  assert.match(html, /id="admin-users-total-orders-count"/);
+  assert.match(html, /id="admin-users-search-input"/);
+  assert.match(html, /id="admin-users-filter-select"/);
+  assert.match(html, /id="admin-users-list"/);
+  assert.match(html, /id="admin-user-detail-modal"/);
+  assert.match(html, /id="admin-user-detail-title"/);
+  assert.match(html, /id="admin-user-detail-email"/);
+  assert.match(html, /id="admin-user-detail-close"/);
+  assert.match(html, /id="admin-user-orders-content"/);
+
+  assert.match(main, /GET_ADMIN_USERS_API_URL/);
+  assert.match(main, /cloudfunctions\.net\/getAdminUsers/);
+  assert.match(main, /adminUsersCache/);
+  assert.match(main, /function loadAdminUsers\b/);
+  assert.match(main, /function renderAdminUsersMetrics\b/);
+  assert.match(main, /function renderAdminUsersList\b/);
+  assert.match(main, /function openAdminUserDetail\b/);
+  assert.match(main, /function closeAdminUserDetail\b/);
+});
+

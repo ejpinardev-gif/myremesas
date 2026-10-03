@@ -22,6 +22,12 @@ const ALLOWED_ORIGINS = new Set([
 const ALLOWED_CURRENCIES = new Set(["CLP", "VES", "USDT", "WLD"]);
 const USDT_NETWORKS = new Set(["TRC20", "BEP20", "ERC20", "Polygon", "Arbitrum One", "Otro"]);
 
+const ADMIN_CURRENCIES = ALLOWED_CURRENCIES;
+const ADMIN_UIDS = new Set([
+  "R3QU4xRLmSQFiArCWWRwGBMEOhc2",
+  "71YiNOk9MOc6mNjxnnKBLST1Clh2",
+]);
+
 function setHeaders(req, res) {
   const origin = req.get("origin");
   res.set("Content-Type", "application/json");
@@ -30,7 +36,7 @@ function setHeaders(req, res) {
   res.set("Vary", "Origin");
   if (origin && ALLOWED_ORIGINS.has(origin)) {
     res.set("Access-Control-Allow-Origin", origin);
-    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     res.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
   }
 }
@@ -284,6 +290,135 @@ async function createOrder(req, res) {
 }
 
 exports.createOrder = onRequest({ region: "us-central1", timeoutSeconds: 60, memory: "512MiB" }, createOrder);
+
+async function getAdminUsers(req, res) {
+  setHeaders(req, res);
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+  if (req.method !== "GET") {
+    return res.status(405).json({ success: false, message: "Método no permitido." });
+  }
+
+  try {
+    const token = getBearerToken(req);
+    if (!token) {
+      return res.status(401).json({ success: false, message: "Token de autorización no proporcionado." });
+    }
+
+    const decoded = await adminAuth.verifyIdToken(token);
+    if (!ADMIN_UIDS.has(decoded.uid)) {
+      return res.status(403).json({ success: false, message: "Acceso no autorizado: requiere privilegios de administrador." });
+    }
+
+    const [listUsersResult, txSnapshot] = await Promise.all([
+      adminAuth.listUsers(1000),
+      db.collectionGroup("transactions").get(),
+    ]);
+
+    const usersMap = new Map();
+    for (const userRecord of listUsersResult.users) {
+      usersMap.set(userRecord.uid, {
+        uid: userRecord.uid,
+        email: userRecord.email || null,
+        displayName: userRecord.displayName || null,
+        createdAt: userRecord.metadata?.creationTime || null,
+        lastSignInAt: userRecord.metadata?.lastSignInTime || null,
+        disabled: Boolean(userRecord.disabled),
+        totalOrders: 0,
+        pendingOrders: 0,
+        completedOrders: 0,
+        cancelledOrders: 0,
+        lastOrderAt: null,
+        orders: [],
+      });
+    }
+
+    txSnapshot.forEach((doc) => {
+      const data = doc.data();
+      const userId = data.userId || doc.ref.parent?.parent?.id;
+      if (!userId) return;
+
+      if (!usersMap.has(userId)) {
+        usersMap.set(userId, {
+          uid: userId,
+          email: data.userEmail || null,
+          displayName: data.userDisplayName || null,
+          createdAt: null,
+          lastSignInAt: null,
+          disabled: false,
+          totalOrders: 0,
+          pendingOrders: 0,
+          completedOrders: 0,
+          cancelledOrders: 0,
+          lastOrderAt: null,
+          orders: [],
+        });
+      }
+
+      const user = usersMap.get(userId);
+      if (!user.email && data.userEmail) user.email = data.userEmail;
+      if (!user.displayName && data.userDisplayName) user.displayName = data.userDisplayName;
+
+      let timestamp = null;
+      if (data.timestamp?.toDate) {
+        timestamp = data.timestamp.toDate().toISOString();
+      } else if (data.timestamp?.seconds) {
+        timestamp = new Date(data.timestamp.seconds * 1000).toISOString();
+      } else if (typeof data.timestamp === "string") {
+        timestamp = data.timestamp;
+      }
+
+      const order = {
+        id: doc.id,
+        amountSend: data.amountSend ?? 0,
+        currencySend: data.currencySend || "",
+        amountReceive: data.amountReceive ?? 0,
+        currencyReceive: data.currencyReceive || "",
+        rateApplied: data.rateApplied ?? null,
+        status: data.status || "Sin comprobante",
+        timestamp,
+        userReceiptUrl: data.userReceiptUrl || null,
+        adminReceiptUrl: data.adminReceiptUrl || null,
+      };
+
+      user.totalOrders++;
+      if (order.status === "Sin comprobante" || order.status === "Pendiente") {
+        user.pendingOrders++;
+      } else if (order.status === "Completado") {
+        user.completedOrders++;
+      } else if (order.status === "Cancelada") {
+        user.cancelledOrders++;
+      }
+      user.orders.push(order);
+    });
+
+    const users = Array.from(usersMap.values());
+    for (const user of users) {
+      user.orders.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+      user.lastOrderAt = user.orders[0]?.timestamp || null;
+    }
+
+    users.sort((a, b) => {
+      if (b.totalOrders !== a.totalOrders) return b.totalOrders - a.totalOrders;
+      const timeA = a.lastOrderAt || a.createdAt || 0;
+      const timeB = b.lastOrderAt || b.createdAt || 0;
+      return new Date(timeB) - new Date(timeA);
+    });
+
+    return res.status(200).json({ success: true, count: users.length, users });
+  } catch (error) {
+    logger.error("Error al consultar usuarios admin", error);
+    const isAuthError = typeof error?.code === "string"
+      && (error.code.startsWith("auth/") || /token|credential/i.test(error.code));
+    if (isAuthError) {
+      return res.status(401).json({ success: false, message: "La sesión no es válida. Vuelve a iniciar sesión." });
+    }
+    return res.status(500).json({ success: false, message: "No se pudieron obtener los usuarios registrados." });
+  }
+}
+
+exports.getAdminUsers = onRequest({ region: "us-central1", timeoutSeconds: 30, memory: "256MiB" }, getAdminUsers);
 
 exports.notifyOrderStatus = onDocumentWritten({
   document: "artifacts/{appId}/users/{userId}/transactions/{transactionId}",

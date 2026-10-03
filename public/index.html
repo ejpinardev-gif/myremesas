@@ -1885,6 +1885,16 @@
                         </span>
                     </button>
 
+                    <button type="button" class="btn menu-nav-button hidden" data-view="admin-users" data-admin-only="true">
+                        <span class="menu-nav-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"/></svg>
+                        </span>
+                        <span>
+                            <strong class="block text-sm">Usuarios</strong>
+                            <span class="text-xs text-slate-500">Registro de clientes e historial de órdenes</span>
+                        </span>
+                    </button>
+
                     <button type="button" class="btn menu-nav-button hidden" data-view="admin-orders" data-admin-only="true">
                         <span class="menu-nav-icon">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6M7 4h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></svg>
@@ -1922,6 +1932,10 @@
             <button type="button" class="bottom-nav-button" data-view="history">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 2m6-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
                 <span>Historial</span>
+            </button>
+            <button type="button" class="bottom-nav-button hidden" data-view="admin-users" data-admin-only="true">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"/></svg>
+                <span>Usuarios</span>
             </button>
             <button type="button" class="bottom-nav-button hidden" data-view="admin-orders" data-admin-only="true">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6M7 4h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></svg>
@@ -2069,6 +2083,80 @@
                 </div>
             </section>
 
+        </div>
+
+        <!-- Panel de Administración de Usuarios -->
+        <div id="admin-users-section" data-view-panel="admin-users" class="shell-card p-5 md:p-7 hidden">
+            <div class="m3-hero mb-6">
+                <div class="flex items-start justify-between gap-4">
+                    <div class="flex items-start gap-4">
+                        <span class="m3-icon-surface" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"/></svg>
+                        </span>
+                        <div class="min-w-0">
+                            <p class="m3-hero-kicker">Gestión de Clientes</p>
+                            <h2 class="section-title text-3xl mt-1">Usuarios Registrados</h2>
+                            <p id="admin-users-status" class="text-sm text-slate-500 mt-2">Abre esta vista para cargar el directorio de clientes.</p>
+                        </div>
+                    </div>
+                    <div>
+                        <button id="admin-refresh-users-btn" type="button" class="btn btn-outline btn-sm flex items-center gap-1.5">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
+                            <span>Actualizar</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="admin-metrics-grid mb-6" aria-label="Resumen de usuarios">
+                <article class="admin-metric admin-metric-completed">
+                    <div class="admin-metric-label"><span class="m3-status-dot bg-blue-500"></span><span>Total Clientes</span></div>
+                    <strong id="admin-total-users-count" class="admin-metric-value">0</strong>
+                    <span class="admin-metric-caption">Usuarios registrados</span>
+                </article>
+                <article class="admin-metric admin-metric-pending">
+                    <div class="admin-metric-label"><span class="m3-status-dot bg-emerald-500"></span><span>Con Órdenes</span></div>
+                    <strong id="admin-users-with-orders-count" class="admin-metric-value">0</strong>
+                    <span class="admin-metric-caption">Clientes activos</span>
+                </article>
+                <article class="admin-metric admin-metric-cancelled">
+                    <div class="admin-metric-label"><span class="m3-status-dot bg-amber-500"></span><span>Órdenes Totales</span></div>
+                    <strong id="admin-users-total-orders-count" class="admin-metric-value">0</strong>
+                    <span class="admin-metric-caption">Historial acumulado</span>
+                </article>
+            </div>
+
+            <div class="mb-6 flex flex-col sm:flex-row gap-3">
+                <div class="relative flex-1">
+                    <input type="text" id="admin-users-search-input" placeholder="Buscar por email, nombre o UID..." class="field-control w-full text-sm">
+                </div>
+                <div class="w-full sm:w-56">
+                    <select id="admin-users-filter-select" class="field-control w-full text-sm">
+                        <option value="all">Todos los usuarios</option>
+                        <option value="with-orders">Con órdenes</option>
+                        <option value="pending-orders">Con órdenes pendientes</option>
+                        <option value="no-orders">Sin órdenes</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="admin-users-list" class="space-y-3">
+                <p class="text-sm text-slate-500 p-4 text-center">Abre esta vista para cargar el directorio de usuarios.</p>
+            </div>
+
+            <!-- Modal de detalle de órdenes de usuario -->
+            <div id="admin-user-detail-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="admin-user-detail-title">
+                <div class="modal-content relative max-w-2xl w-full">
+                    <div class="flex items-start justify-between gap-3 mb-4">
+                        <div>
+                            <h2 id="admin-user-detail-title" class="section-title text-2xl text-gray-900">Historial de Usuario</h2>
+                            <p id="admin-user-detail-email" class="text-sm text-slate-500 mt-1"></p>
+                        </div>
+                        <button id="admin-user-detail-close" type="button" class="btn btn-outline btn-sm" aria-label="Cerrar modal">Cerrar</button>
+                    </div>
+                    <div id="admin-user-orders-content" class="space-y-3 max-h-[60vh] overflow-y-auto pr-1"></div>
+                </div>
+            </div>
         </div>
 
         <!-- Panel de Gestión de Órdenes del Administrador -->

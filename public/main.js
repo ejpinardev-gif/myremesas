@@ -26,6 +26,7 @@ const ADMIN_UIDS = [
 
 const PASSWORD_RESET_URL = 'https://myremesas-prod-deploy.vercel.app/';
 const CREATE_ORDER_API_URL = 'https://us-central1-studio-7601782447-44d81.cloudfunctions.net/createOrder';
+const GET_ADMIN_USERS_API_URL = 'https://us-central1-studio-7601782447-44d81.cloudfunctions.net/getAdminUsers';
 const FCM_SERVICE_WORKER_PATH = '/firebase-messaging-sw.js';
 const FCM_VAPID_KEY = document.querySelector('meta[name="fcm-vapid-key"]')?.content?.trim() || '';
 
@@ -70,7 +71,7 @@ let marginConfig = { ...DEFAULT_MARGIN_CONFIG };
 let marginConfigUnsubscribe = null;
 
 // --- DECLARACIN DE VARIABLES DEL DOM ---
-let userIdDisplay, userIdContainer, authStatus, amountSendInput, currencySendSelect, currencyReceiveSelect, swapButton, amountReceiveDisplay, rateDisplay, suggestedRateDisplay, paymentButton, errorMessage, historyContainer, loadingHistory, adminPanel, rateFetchStatus, rateLastUpdated, ticketLiveStatus, savedAccountsList, accountCount, wldUsdtDisplay, usdtClpP2pWldDisplay, clpUsdtP2pDisplay, vesUsdtP2pDisplay, usdtClpMarginDisplay, adminBankNameInput, adminAccountHolderInput, adminAccountNumberInput, adminRutInput, adminAccountTypeInput, adminEmailInput, saveAccountsButton, accountStatus, paymentModal, closeModalButton, modalAmountSend, modalAmountReceive, noAccountsMessage, modalCryptoWarning, modalTransferCurrency, adminToggleContainer, marginWldClpInput, marginClpVesInput, marginUsdtClpInput, saveMarginsButton, marginStatus, marginWldClpLabel, marginClpVesLabel, marginUsdtClpLabel, receiptUploadInput, uploadReceiptButton, receiptUploadStatus, adminTransactionsSection, adminPendingTransactionsList, adminCompletedTransactionsList, adminOrdersStatus, adminLoadMoreButton, usdtDestinationForm, usdtWalletInput, usdtNetworkSelect, usdtNotesInput, vesDestinationForm, vesBeneficiaryInput, vesIdInput, vesBankInput, vesAccountTypeInput, vesAccountNumberInput, vesNotesInput, imageViewerModal, closeImageViewerButton, imageViewerImg, imageViewerTitle, orderCreationSection, adminAccountSelect, selectedAdminAccountDetails, binanceBalanceCard, usdtBalanceDisplay, refreshUsdtBalanceButton, usdtBalanceStatus, menuToggleButton, appNavMenu, menuBackdrop, menuCloseButton, menuUserEmail, menuLogoutButton, historySection, amountLoadingIndicator, historyLoadMoreButton;
+let userIdDisplay, userIdContainer, authStatus, amountSendInput, currencySendSelect, currencyReceiveSelect, swapButton, amountReceiveDisplay, rateDisplay, suggestedRateDisplay, paymentButton, errorMessage, historyContainer, loadingHistory, adminPanel, rateFetchStatus, rateLastUpdated, ticketLiveStatus, savedAccountsList, accountCount, wldUsdtDisplay, usdtClpP2pWldDisplay, clpUsdtP2pDisplay, vesUsdtP2pDisplay, usdtClpMarginDisplay, adminBankNameInput, adminAccountHolderInput, adminAccountNumberInput, adminRutInput, adminAccountTypeInput, adminEmailInput, saveAccountsButton, accountStatus, paymentModal, closeModalButton, modalAmountSend, modalAmountReceive, noAccountsMessage, modalCryptoWarning, modalTransferCurrency, adminToggleContainer, marginWldClpInput, marginClpVesInput, marginUsdtClpInput, saveMarginsButton, marginStatus, marginWldClpLabel, marginClpVesLabel, marginUsdtClpLabel, receiptUploadInput, uploadReceiptButton, receiptUploadStatus, adminTransactionsSection, adminPendingTransactionsList, adminCompletedTransactionsList, adminOrdersStatus, adminLoadMoreButton, usdtDestinationForm, usdtWalletInput, usdtNetworkSelect, usdtNotesInput, vesDestinationForm, vesBeneficiaryInput, vesIdInput, vesBankInput, vesAccountTypeInput, vesAccountNumberInput, vesNotesInput, imageViewerModal, closeImageViewerButton, imageViewerImg, imageViewerTitle, orderCreationSection, adminAccountSelect, selectedAdminAccountDetails, binanceBalanceCard, usdtBalanceDisplay, refreshUsdtBalanceButton, usdtBalanceStatus, menuToggleButton, appNavMenu, menuBackdrop, menuCloseButton, menuUserEmail, menuLogoutButton, historySection, amountLoadingIndicator, historyLoadMoreButton, adminUsersSection, adminUsersStatus, adminRefreshUsersBtn, adminTotalUsersCount, adminUsersWithOrdersCount, adminUsersTotalOrdersCount, adminUsersSearchInput, adminUsersFilterSelect, adminUsersList, adminUserDetailModal, adminUserDetailTitle, adminUserDetailEmail, adminUserDetailClose, adminUserOrdersContent;
 
 let currentTransactionId = null;
 let currentTransactionPath = null;
@@ -95,6 +96,8 @@ let activeView = null;
 let hasLoadedUserHistory = false;
 let hasLoadedAdminOrders = false;
 let hasLoadedAdminConfigRealtime = false;
+let hasLoadedAdminUsers = false;
+let adminUsersCache = [];
 let adminTransactionsCursor = null;
 let adminTransactionsHasMore = false;
 let userTransactionsCursor = null;
@@ -226,6 +229,20 @@ function initializeDOM() {
     adminCancelledColumnCount = document.getElementById('admin-cancelled-column-count');
     adminOrdersStatus = document.getElementById('admin-orders-status');
     adminLoadMoreButton = document.getElementById('admin-load-more-button');
+    adminUsersSection = document.getElementById('admin-users-section');
+    adminUsersStatus = document.getElementById('admin-users-status');
+    adminRefreshUsersBtn = document.getElementById('admin-refresh-users-btn');
+    adminTotalUsersCount = document.getElementById('admin-total-users-count');
+    adminUsersWithOrdersCount = document.getElementById('admin-users-with-orders-count');
+    adminUsersTotalOrdersCount = document.getElementById('admin-users-total-orders-count');
+    adminUsersSearchInput = document.getElementById('admin-users-search-input');
+    adminUsersFilterSelect = document.getElementById('admin-users-filter-select');
+    adminUsersList = document.getElementById('admin-users-list');
+    adminUserDetailModal = document.getElementById('admin-user-detail-modal');
+    adminUserDetailTitle = document.getElementById('admin-user-detail-title');
+    adminUserDetailEmail = document.getElementById('admin-user-detail-email');
+    adminUserDetailClose = document.getElementById('admin-user-detail-close');
+    adminUserOrdersContent = document.getElementById('admin-user-orders-content');
     usdtDestinationForm = document.getElementById('usdt-destination-form');
     usdtWalletInput = document.getElementById('usdt-wallet-input');
     usdtNetworkSelect = document.getElementById('usdt-network-select');
@@ -336,10 +353,17 @@ async function initializeFirebase() {
                         if (adminCancelledTransactionsList) adminCancelledTransactionsList.innerHTML = '';
                         setAdminOrderCounts(0, 0, 0);
                     }
+                    if (adminUsersSection) {
+                        adminUsersSection.classList.add('hidden');
+                        if (adminUsersList) adminUsersList.innerHTML = '';
+                    }
+                    adminUsersCache = [];
+                    hasLoadedAdminUsers = false;
                 }
                 hasLoadedUserHistory = false;
                 hasLoadedAdminOrders = false;
                 hasLoadedAdminConfigRealtime = false;
+                hasLoadedAdminUsers = false;
                 adminTransactionsCursor = null;
                 adminTransactionsHasMore = false;
                 await activateView(getInitialView());
@@ -1031,6 +1055,8 @@ function clearRealtimeListeners() {
     userTransactionsCursor = null;
     userTransactionsHasMore = false;
     userTransactionsCache = [];
+    adminUsersCache = [];
+    hasLoadedAdminUsers = false;
     if (historyLoadMoreButton) historyLoadMoreButton.classList.add('hidden');
 }
 
@@ -1167,6 +1193,323 @@ function setAdminOrdersStatus(message, isError = false) {
     adminOrdersStatus.classList.toggle('text-slate-500', !isError);
 }
 
+function setAdminUsersStatus(message, isError = false) {
+    if (!adminUsersStatus) return;
+    adminUsersStatus.textContent = message;
+    adminUsersStatus.classList.toggle('text-red-600', isError);
+    adminUsersStatus.classList.toggle('text-slate-500', !isError);
+}
+
+async function loadAdminUsersFallbackFromFirestore() {
+    if (!db) return [];
+    try {
+        const snapshot = await getDocs(query(collectionGroup(db, 'transactions'), limit(300)));
+        const usersMap = new Map();
+        snapshot.docs.forEach((docSnap) => {
+            const data = docSnap.data();
+            const txId = docSnap.id;
+            const uid = data.userId || (docSnap.ref.path.split('/')[3]) || 'desconocido';
+            if (!usersMap.has(uid)) {
+                usersMap.set(uid, {
+                    uid,
+                    email: data.userEmail || null,
+                    displayName: data.userDisplayName || null,
+                    createdAt: null,
+                    lastSignInAt: null,
+                    totalOrders: 0,
+                    pendingOrders: 0,
+                    completedOrders: 0,
+                    cancelledOrders: 0,
+                    lastOrderAt: null,
+                    orders: [],
+                });
+            }
+            const u = usersMap.get(uid);
+            if (!u.email && data.userEmail) u.email = data.userEmail;
+            if (!u.displayName && data.userDisplayName) u.displayName = data.userDisplayName;
+
+            const orderTimestamp = data.timestamp?.toDate ? data.timestamp.toDate().toISOString() : (data.timestamp?.seconds ? new Date(data.timestamp.seconds * 1000).toISOString() : (data.timestamp || null));
+            const status = data.status || 'Sin comprobante';
+            u.totalOrders++;
+            if (status === 'Sin comprobante' || status === 'Pendiente') u.pendingOrders++;
+            else if (status === 'Completado') u.completedOrders++;
+            else if (status === 'Cancelada') u.cancelledOrders++;
+
+            u.orders.push({
+                id: txId,
+                amountSend: data.amountSend ?? 0,
+                currencySend: data.currencySend || '',
+                amountReceive: data.amountReceive ?? 0,
+                currencyReceive: data.currencyReceive || '',
+                rateApplied: data.rateApplied ?? null,
+                status,
+                timestamp: orderTimestamp,
+                userReceiptUrl: data.userReceiptUrl || null,
+                adminReceiptUrl: data.adminReceiptUrl || null,
+            });
+        });
+
+        const list = Array.from(usersMap.values());
+        list.forEach((u) => {
+            u.orders.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+            u.lastOrderAt = u.orders[0]?.timestamp || null;
+        });
+        list.sort((a, b) => (b.totalOrders - a.totalOrders));
+        return list;
+    } catch (e) {
+        console.warn('Fallback de usuarios desde Firestore falló:', e);
+        return [];
+    }
+}
+
+async function loadAdminUsers({ forceRefresh = false } = {}) {
+    if (!isCurrentUserAdmin) return;
+    if (adminUsersCache.length > 0 && !forceRefresh) {
+        renderAdminUsersMetrics();
+        renderAdminUsersList();
+        return;
+    }
+
+    setAdminUsersStatus('Cargando usuarios...');
+    if (adminRefreshUsersBtn) adminRefreshUsersBtn.disabled = true;
+
+    try {
+        let usersData = null;
+        const currentUser = auth?.currentUser;
+        if (currentUser) {
+            try {
+                const idToken = await currentUser.getIdToken();
+                const response = await fetch(GET_ADMIN_USERS_API_URL, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${idToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success && Array.isArray(result.users)) {
+                        usersData = result.users;
+                    }
+                } else {
+                    console.warn(`Respuesta no exitosa de getAdminUsers: ${response.status}`);
+                }
+            } catch (fetchError) {
+                console.warn('Error al contactar getAdminUsers endpoint:', fetchError);
+            }
+        }
+
+        if (!usersData) {
+            usersData = await loadAdminUsersFallbackFromFirestore();
+            setAdminUsersStatus('Mostrando usuarios desde órdenes registradas (modo alternativo).');
+        } else {
+            setAdminUsersStatus('Directorio de usuarios sincronizado.');
+        }
+
+        adminUsersCache = usersData;
+        renderAdminUsersMetrics();
+        renderAdminUsersList();
+    } catch (error) {
+        console.error('Error al cargar usuarios admin:', error);
+        const fallbackUsers = await loadAdminUsersFallbackFromFirestore();
+        if (fallbackUsers.length > 0) {
+            adminUsersCache = fallbackUsers;
+            setAdminUsersStatus('Conexión limitada: mostrando usuarios desde órdenes registradas.', true);
+        } else {
+            setAdminUsersStatus('No se pudieron cargar los usuarios. Revisa tu conexión.', true);
+        }
+        renderAdminUsersMetrics();
+        renderAdminUsersList();
+    } finally {
+        if (adminRefreshUsersBtn) adminRefreshUsersBtn.disabled = false;
+    }
+}
+
+function renderAdminUsersMetrics() {
+    const totalUsers = adminUsersCache.length;
+    const usersWithOrders = adminUsersCache.filter(u => (u.totalOrders || 0) > 0).length;
+    const totalOrders = adminUsersCache.reduce((sum, u) => sum + (u.totalOrders || 0), 0);
+
+    if (adminTotalUsersCount) adminTotalUsersCount.textContent = String(totalUsers);
+    if (adminUsersWithOrdersCount) adminUsersWithOrdersCount.textContent = String(usersWithOrders);
+    if (adminUsersTotalOrdersCount) adminUsersTotalOrdersCount.textContent = String(totalOrders);
+}
+
+function renderAdminUsersList() {
+    if (!adminUsersList) return;
+    const searchQuery = (adminUsersSearchInput?.value || '').trim().toLowerCase();
+    const filter = adminUsersFilterSelect?.value || 'all';
+
+    const filtered = adminUsersCache.filter((user) => {
+        if (searchQuery) {
+            const email = (user.email || '').toLowerCase();
+            const name = (user.displayName || '').toLowerCase();
+            const uid = (user.uid || '').toLowerCase();
+            if (!email.includes(searchQuery) && !name.includes(searchQuery) && !uid.includes(searchQuery)) {
+                return false;
+            }
+        }
+        if (filter === 'with-orders') {
+            return (user.totalOrders || 0) > 0;
+        }
+        if (filter === 'pending-orders') {
+            return (user.pendingOrders || 0) > 0;
+        }
+        if (filter === 'no-orders') {
+            return (user.totalOrders || 0) === 0;
+        }
+        return true;
+    });
+
+    adminUsersList.innerHTML = '';
+    if (filtered.length === 0) {
+        adminUsersList.innerHTML = '<p class="text-sm text-slate-500 p-4 text-center">No se encontraron usuarios con los criterios seleccionados.</p>';
+        return;
+    }
+
+    filtered.forEach((user) => {
+        const card = document.createElement('div');
+        card.className = 'admin-user-card m3-transaction-card p-4 space-y-3 text-xs sm:text-sm';
+
+        const displayName = escapeHtml(user.displayName || 'Sin nombre');
+        const email = escapeHtml(user.email || 'Sin correo');
+        const uidShort = escapeHtml((user.uid || '').slice(0, 10) + '...');
+        const createdAt = user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A';
+        const lastSignInAt = user.lastSignInAt ? new Date(user.lastSignInAt).toLocaleDateString() : 'Nunca';
+
+        const total = user.totalOrders || 0;
+        const pending = user.pendingOrders || 0;
+        const completed = user.completedOrders || 0;
+
+        card.innerHTML = `
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-2">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <strong class="text-sm font-semibold text-slate-900">${email}</strong>
+                        ${user.displayName ? `<span class="text-xs text-slate-500">(${displayName})</span>` : ''}
+                    </div>
+                    <p class="text-xs text-slate-400 font-mono mt-0.5">UID: ${uidShort}</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" class="btn btn-outline btn-sm admin-user-view-history-btn" data-user-id="${escapeHtml(user.uid || '')}">
+                        Ver historial (${total})
+                    </button>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs">
+                <div class="bg-slate-50 rounded p-2">
+                    <span class="text-slate-500 block">Registrado</span>
+                    <strong class="text-slate-700">${createdAt}</strong>
+                </div>
+                <div class="bg-slate-50 rounded p-2">
+                    <span class="text-slate-500 block">Último acceso</span>
+                    <strong class="text-slate-700">${lastSignInAt}</strong>
+                </div>
+                <div class="bg-amber-50 rounded p-2">
+                    <span class="text-amber-700 block">Pendientes</span>
+                    <strong class="text-amber-900">${pending}</strong>
+                </div>
+                <div class="bg-emerald-50 rounded p-2">
+                    <span class="text-emerald-700 block">Completadas</span>
+                    <strong class="text-emerald-900">${completed}</strong>
+                </div>
+            </div>
+        `;
+
+        const viewHistoryBtn = card.querySelector('.admin-user-view-history-btn');
+        if (viewHistoryBtn) {
+            viewHistoryBtn.addEventListener('click', () => {
+                openAdminUserDetail(user);
+            });
+        }
+
+        adminUsersList.appendChild(card);
+    });
+}
+
+function openAdminUserDetail(user) {
+    if (!adminUserDetailModal) return;
+    if (adminUserDetailTitle) {
+        adminUserDetailTitle.textContent = `Historial: ${user.email || user.displayName || user.uid}`;
+    }
+    if (adminUserDetailEmail) {
+        const registration = user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A';
+        adminUserDetailEmail.textContent = `UID: ${user.uid || 'N/A'} · Registrado: ${registration}`;
+    }
+    if (adminUserOrdersContent) {
+        adminUserOrdersContent.innerHTML = '';
+        const orders = user.orders || [];
+        if (orders.length === 0) {
+            adminUserOrdersContent.innerHTML = '<p class="text-sm text-slate-500 p-4 text-center">Este cliente no registra órdenes en el sistema.</p>';
+        } else {
+            orders.forEach((order) => {
+                const orderCard = document.createElement('div');
+                orderCard.className = 'border border-slate-200 rounded-lg p-3 text-xs sm:text-sm bg-white space-y-2';
+                const statusBadge = getStatusBadgeClasses(order.status || 'Sin comprobante');
+                const orderDate = order.timestamp ? new Date(order.timestamp).toLocaleString() : 'Fecha desconocida';
+                const rateText = order.rateApplied ? Number(order.rateApplied).toFixed(4) : 'N/A';
+                const sendText = formatCurrency(order.amountSend, order.currencySend);
+                const receiveText = formatCurrency(order.amountReceive, order.currencyReceive);
+
+                let receiptLinks = '';
+                if (order.userReceiptUrl) {
+                    receiptLinks += `<button type="button" class="btn btn-outline btn-xs view-user-receipt-btn" data-url="${escapeHtml(order.userReceiptUrl)}" data-title="Comprobante cliente #${escapeHtml((order.id || '').slice(-6).toUpperCase())}">Comprobante cliente</button>`;
+                }
+                if (order.adminReceiptUrl) {
+                    receiptLinks += `<button type="button" class="btn btn-outline btn-xs view-admin-receipt-btn" data-url="${escapeHtml(order.adminReceiptUrl)}" data-title="Comprobante admin #${escapeHtml((order.id || '').slice(-6).toUpperCase())}">Comprobante admin</button>`;
+                }
+
+                orderCard.innerHTML = `
+                    <div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
+                        <span class="font-mono text-xs text-slate-500">#${escapeHtml((order.id || '').slice(-6).toUpperCase())}</span>
+                        <span class="badge ${statusBadge} px-2 py-0.5 rounded text-xs font-medium">${escapeHtml(order.status || 'Sin comprobante')}</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                            <span class="text-slate-400 block">Envía</span>
+                            <strong class="text-slate-800">${escapeHtml(sendText)}</strong>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 block">Recibe</span>
+                            <strong class="text-slate-800">${escapeHtml(receiveText)}</strong>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs text-slate-500">
+                        <span>Tasa: ${escapeHtml(rateText)} · ${escapeHtml(orderDate)}</span>
+                        ${receiptLinks ? `<div class="flex items-center gap-1.5">${receiptLinks}</div>` : ''}
+                    </div>
+                `;
+
+                orderCard.querySelectorAll('.view-user-receipt-btn, .view-admin-receipt-btn').forEach((btn) => {
+                    btn.addEventListener('click', () => {
+                        const url = btn.getAttribute('data-url');
+                        const title = btn.getAttribute('data-title');
+                        openReceiptViewer(url, title);
+                    });
+                });
+
+                adminUserOrdersContent.appendChild(orderCard);
+            });
+        }
+    }
+
+    lastFocusedElement = document.activeElement;
+    adminUserDetailModal.classList.remove('hidden');
+    adminUserDetailModal.setAttribute('aria-hidden', 'false');
+    const focusable = adminUserDetailModal.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (focusable) focusable.focus();
+}
+
+function closeAdminUserDetail() {
+    if (!adminUserDetailModal || adminUserDetailModal.classList.contains('hidden')) return;
+    adminUserDetailModal.classList.add('hidden');
+    adminUserDetailModal.setAttribute('aria-hidden', 'true');
+    if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+        lastFocusedElement.focus();
+        lastFocusedElement = null;
+    }
+}
+
 function setAdminOrderCounts(pending, completed, cancelled) {
     const values = { pending, completed, cancelled };
     const metricIds = {
@@ -1207,6 +1550,11 @@ async function activateView(viewName) {
     if (viewName === 'admin-orders' && isCurrentUserAdmin) {
         hasLoadedAdminOrders = true;
         await setupAdminTransactionsListener();
+    }
+
+    if (viewName === 'admin-users' && isCurrentUserAdmin) {
+        hasLoadedAdminUsers = true;
+        await loadAdminUsers();
     }
 
     if (viewName === 'admin-config' && isCurrentUserAdmin) {
@@ -3152,6 +3500,31 @@ function registerStaticEventListeners() {
     if (vesAccountTypeInput) vesAccountTypeInput.addEventListener('change', scheduleVesDestinationPersist);
     if (vesAccountNumberInput) vesAccountNumberInput.addEventListener('input', scheduleVesDestinationPersist);
     if (vesNotesInput) vesNotesInput.addEventListener('input', scheduleVesDestinationPersist);
+    if (adminUsersSearchInput) {
+        adminUsersSearchInput.addEventListener('input', () => {
+            renderAdminUsersList();
+        });
+    }
+    if (adminUsersFilterSelect) {
+        adminUsersFilterSelect.addEventListener('change', () => {
+            renderAdminUsersList();
+        });
+    }
+    if (adminRefreshUsersBtn) {
+        adminRefreshUsersBtn.addEventListener('click', () => {
+            loadAdminUsers({ forceRefresh: true }).catch(error => console.error('Error al actualizar usuarios:', error));
+        });
+    }
+    if (adminUserDetailClose) {
+        adminUserDetailClose.addEventListener('click', closeAdminUserDetail);
+    }
+    if (adminUserDetailModal) {
+        adminUserDetailModal.addEventListener('click', (event) => {
+            if (event.target === adminUserDetailModal) {
+                closeAdminUserDetail();
+            }
+        });
+    }
 }
 
 function handleSavedAccountsListClick(event) {
@@ -3284,6 +3657,8 @@ async function bootstrapApp() {
             if (event.key === 'Escape') {
                 if (confirmModal && !confirmModal.classList.contains('hidden')) {
                     document.getElementById('confirm-cancel-button')?.click();
+                } else if (adminUserDetailModal && !adminUserDetailModal.classList.contains('hidden')) {
+                    closeAdminUserDetail();
                 } else if (paymentModal && !paymentModal.classList.contains('hidden')) {
                     closePaymentModal();
                 } else {
@@ -3291,6 +3666,7 @@ async function bootstrapApp() {
                 }
             }
             keepFocusInsideModal(event, confirmModal);
+            keepFocusInsideModal(event, adminUserDetailModal);
             keepFocusInsideModal(event, paymentModal);
             keepFocusInsideModal(event, imageViewerModal);
         });
