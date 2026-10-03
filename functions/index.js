@@ -138,7 +138,7 @@ async function getTrustedRates() {
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20_000);
+  const timeout = setTimeout(() => controller.abort(), 7_000);
   try {
     const response = await fetch(RATES_URL, { signal: controller.signal });
     if (!response.ok) throw new Error(`Rates service returned ${response.status}.`);
@@ -146,6 +146,23 @@ async function getTrustedRates() {
     if (!rates?.success) throw new Error("Rates service returned an invalid response.");
     trustedRatesCache = { payload: rates, cachedAt: Date.now() };
     return rates;
+  } catch (error) {
+    logger.warn("Rates fetch failed in getTrustedRates, using fallback or stale cache", { error: error?.message });
+    if (trustedRatesCache?.payload) {
+      return { ...trustedRatesCache.payload, degraded: true };
+    }
+    return {
+      success: true,
+      WLD_to_USDT: 1.19,
+      USDT_to_CLP_P2P: 963,
+      USDT_to_VES_P2P: 36,
+      degraded: true,
+      meta: {
+        wld_source: "Fallback",
+        clp_source: "Fallback",
+        ves_source: "Fallback",
+      },
+    };
   } finally {
     clearTimeout(timeout);
   }
@@ -266,7 +283,7 @@ async function createOrder(req, res) {
   }
 }
 
-exports.createOrder = onRequest({ region: "us-central1", timeoutSeconds: 30 }, createOrder);
+exports.createOrder = onRequest({ region: "us-central1", timeoutSeconds: 60, memory: "512MiB" }, createOrder);
 
 exports.notifyOrderStatus = onDocumentWritten({
   document: "artifacts/{appId}/users/{userId}/transactions/{transactionId}",

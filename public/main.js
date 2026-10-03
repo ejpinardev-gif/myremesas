@@ -29,9 +29,8 @@ const CREATE_ORDER_API_URL = 'https://us-central1-studio-7601782447-44d81.cloudf
 const FCM_SERVICE_WORKER_PATH = '/firebase-messaging-sw.js';
 const FCM_VAPID_KEY = document.querySelector('meta[name="fcm-vapid-key"]')?.content?.trim() || '';
 
-// Cotización: el precio se congela al abrir el checkout y caduca para que el
-// usuario nunca confirme contra una tasa vieja sin saberlo.
-const PAYMENT_RATE_VALIDITY_MS = 60_000;
+// Cotización: el precio se congela al abrir el checkout y caduca en 5 minutos
+const PAYMENT_RATE_VALIDITY_MS = 300_000;
 const PAYMENT_RATE_DRIFT_THRESHOLD = 0.005;
 
 // Variables Globales de Firebase (provistas por el entorno)
@@ -1740,6 +1739,9 @@ async function recordTransaction(amountSend, currencySend, amountReceive, curren
         });
     } catch (error) {
         if (error?.name === 'AbortError') throw new Error('La validación de la tasa tardó demasiado. Intenta nuevamente.');
+        if (error?.message === 'Failed to fetch' || error instanceof TypeError) {
+            throw new Error('No se pudo conectar con el servidor de órdenes. Verifica tu conexión a internet o intenta nuevamente.');
+        }
         throw error;
     } finally {
         window.clearTimeout(timeoutId);
@@ -2128,6 +2130,7 @@ function updatePaymentRateLockView() {
         paymentRateTimer.textContent = expired
             ? 'Tasa expirada'
             : `Válida por ${formatRateCountdown(getPaymentRateSecondsLeft())}`;
+        paymentRateTimer.classList.remove('hidden');
     }
     refreshPaymentRateButton?.classList.toggle('hidden', !expired);
     if (paymentNextButton) {
@@ -2467,8 +2470,17 @@ async function handleUserReceiptUpload(event) {
         receiptUploadStatus.className = 'text-xs text-green-600';
     } catch (error) {
         console.error('Error al subir comprobante:', error);
-        receiptUploadStatus.textContent = `Error: ${error.message}`;
-        receiptUploadStatus.className = 'text-xs text-red-600';
+        if (currentTransactionId) {
+            receiptUploadStatus.textContent = `Tu orden #${(currentTransactionId || '').slice(-6).toUpperCase()} fue registrada, pero no se pudo adjuntar el comprobante. Puedes subirlo desde tu historial o enviarlo por WhatsApp.`;
+            receiptUploadStatus.className = 'text-xs text-amber-600';
+        } else {
+            const rawMessage = error?.message || '';
+            const displayMessage = (rawMessage === 'Failed to fetch' || rawMessage.includes('Failed to fetch'))
+                ? 'No se pudo conectar con el servidor. Verifica tu conexión e intenta nuevamente.'
+                : (rawMessage || 'No se pudo procesar la solicitud.');
+            receiptUploadStatus.textContent = `Error: ${displayMessage}`;
+            receiptUploadStatus.className = 'text-xs text-red-600';
+        }
     } finally {
         uploadReceiptButton.disabled = false;
         if (receiptUploadInput) receiptUploadInput.value = '';

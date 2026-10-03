@@ -92,7 +92,7 @@ test("the checkout locks the quote and blocks confirmation once it expires", () 
   assert.match(html, /id="payment-rate-lock"/);
   assert.match(html, /id="payment-rate-timer"/);
   assert.match(html, /id="refresh-payment-rate"/);
-  assert.match(main, /const PAYMENT_RATE_VALIDITY_MS = 60_000;/);
+  assert.match(main, /const PAYMENT_RATE_VALIDITY_MS = 300_000;/);
   assert.match(main, /function capturePaymentRateQuote\(\)/);
   assert.match(main, /function isPaymentRateExpired\(\)/);
   assert.match(main, /La cotización expiró\. Actualiza la tasa antes de confirmar\./);
