@@ -488,7 +488,8 @@ async function ensurePushMessaging() {
     if (!supported) throw new Error('Este navegador no soporta Firebase Cloud Messaging.');
 
     if (!pushRegistration) {
-        pushRegistration = await navigator.serviceWorker.register(FCM_SERVICE_WORKER_PATH, { scope: '/' });
+        await navigator.serviceWorker.register(FCM_SERVICE_WORKER_PATH, { scope: '/' });
+        pushRegistration = await navigator.serviceWorker.ready;
     }
     if (!messaging) {
         messaging = getMessaging(firebaseApp);
@@ -576,7 +577,12 @@ async function requestPushNotifications() {
     } catch (error) {
         console.warn('No se pudieron activar las notificaciones push:', error);
         setPushNotificationStatus('No se pudieron activar las notificaciones.', 'error');
-        showToast(error?.message || 'No se pudieron activar las notificaciones.', 'error');
+        const rawMessage = error?.message || '';
+        let userMessage = rawMessage || 'No se pudieron activar las notificaciones.';
+        if (/push service error/i.test(rawMessage)) {
+            userMessage = 'Error del servicio push del navegador. Si usas Brave activa los servicios push en Ajustes; en Chrome revisa tu conexión o extensiones.';
+        }
+        showToast(userMessage, 'error');
     } finally {
         if (enablePushNotificationsButton) enablePushNotificationsButton.disabled = false;
     }

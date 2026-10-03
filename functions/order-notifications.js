@@ -64,11 +64,7 @@ async function removeInvalidTokenDocuments(db, collectionPath, entries, indexes)
   return results.filter((result) => result.status === "fulfilled").length;
 }
 
-async function sendOrderNotifications({ db, messaging, userId, transactionId, before, after }) {
-  const notification = buildOrderNotification({ transactionId, before, after });
-  if (!notification) return { sent: 0, removed: 0, skipped: true };
-
-  const collectionPath = `artifacts/1:775892034675:web:98ed2724bcaff2ed427606/users/${userId}/notificationTokens`;
+async function sendNotificationToTokens({ db, messaging, collectionPath, notification }) {
   const tokenSnapshot = await db.collection(collectionPath)
     .limit(MAX_TOKENS_PER_BATCH)
     .get();
@@ -98,7 +94,7 @@ async function sendOrderNotifications({ db, messaging, userId, transactionId, be
       },
     });
 
-    response.responses.forEach((result, index) => {
+    response.responses.forEach((result) => {
       if (result.success) {
         sent += 1;
         return;
@@ -119,10 +115,78 @@ async function sendOrderNotifications({ db, messaging, userId, transactionId, be
   return { sent, removed, skipped: false };
 }
 
+function getAdminOrderUrl(transactionId) {
+  return `${CANONICAL_APP_URL}/?view=admin-orders&order=${encodeURIComponent(transactionId || "")}`;
+}
+
+function shouldNotifyAdminOrder(before, after) {
+  if (!after) return false;
+  if (!before) return true;
+  return before.status !== after.status && after.status === "Pendiente";
+}
+
+function buildAdminOrderNotification({ transactionId, before, after }) {
+  if (!shouldNotifyAdminOrder(before, after)) return null;
+
+  const shortId = shortTransactionId(transactionId);
+  let title;
+  let body;
+
+  if (!before) {
+    title = "Nueva orden registrada";
+    body = `Se registró la orden ${shortId}.`;
+  } else if (after.status === "Pendiente") {
+    title = "Comprobante por revisar";
+    body = `La orden ${shortId} tiene comprobante listo para verificar.`;
+  } else {
+    title = "Orden actualizada";
+    body = `La orden ${shortId} cambió a ${after.status}.`;
+  }
+
+  return {
+    title,
+    body,
+    url: getAdminOrderUrl(transactionId),
+    transactionId: String(transactionId || ""),
+    status: String(after.status || ""),
+  };
+}
+
+async function sendOrderNotifications({ db, messaging, userId, transactionId, before, after }) {
+  const notification = buildOrderNotification({ transactionId, before, after });
+  if (!notification) return { sent: 0, removed: 0, skipped: true };
+
+  const collectionPath = `artifacts/1:775892034675:web:98ed2724bcaff2ed427606/users/${userId}/notificationTokens`;
+  return sendNotificationToTokens({ db, messaging, collectionPath, notification });
+}
+
+async function sendAdminOrderNotifications({ db, messaging, adminUids, transactionId, before, after }) {
+  const notification = buildAdminOrderNotification({ transactionId, before, after });
+  if (!notification) return { sent: 0, removed: 0, skipped: true };
+
+  const uids = Array.isArray(adminUids) ? adminUids : Array.from(adminUids || []);
+  if (!uids.length) return { sent: 0, removed: 0, skipped: true };
+
+  let totalSent = 0;
+  let totalRemoved = 0;
+  for (const adminUid of uids) {
+    const collectionPath = `artifacts/1:775892034675:web:98ed2724bcaff2ed427606/users/${adminUid}/notificationTokens`;
+    const res = await sendNotificationToTokens({ db, messaging, collectionPath, notification });
+    totalSent += res.sent;
+    totalRemoved += res.removed;
+  }
+
+  return { sent: totalSent, removed: totalRemoved, skipped: totalSent === 0 && totalRemoved === 0 };
+}
+
 module.exports = {
+  buildAdminOrderNotification,
   buildOrderNotification,
+  getAdminOrderUrl,
   getOrderUrl,
   isInvalidTokenError,
+  sendAdminOrderNotifications,
   sendOrderNotifications,
+  shouldNotifyAdminOrder,
   shouldNotifyOrderStatus,
 };

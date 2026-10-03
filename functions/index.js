@@ -5,7 +5,7 @@ const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 const { getMessaging } = require("firebase-admin/messaging");
 const { FieldValue, getFirestore } = require("firebase-admin/firestore");
-const { sendOrderNotifications } = require("./order-notifications");
+const { sendOrderNotifications, sendAdminOrderNotifications } = require("./order-notifications");
 
 initializeApp();
 
@@ -429,21 +429,39 @@ exports.notifyOrderStatus = onDocumentWritten({
   const after = event.data.after.exists ? event.data.after.data() : null;
   if (!after) return;
 
-  const result = await sendOrderNotifications({
-    db,
-    messaging: getMessaging(),
-    userId: event.params.userId,
-    transactionId: event.params.transactionId,
-    before,
-    after,
-  });
+  const [customerResult, adminResult] = await Promise.all([
+    sendOrderNotifications({
+      db,
+      messaging: getMessaging(),
+      userId: event.params.userId,
+      transactionId: event.params.transactionId,
+      before,
+      after,
+    }),
+    sendAdminOrderNotifications({
+      db,
+      messaging: getMessaging(),
+      adminUids: Array.from(ADMIN_UIDS),
+      transactionId: event.params.transactionId,
+      before,
+      after,
+    }),
+  ]);
 
-  if (!result.skipped) {
-    logger.info("Sent order status notification", {
+  if (!customerResult.skipped) {
+    logger.info("Sent order status notification to customer", {
       uid: event.params.userId,
       transactionId: event.params.transactionId,
-      sent: result.sent,
-      removed: result.removed,
+      sent: customerResult.sent,
+      removed: customerResult.removed,
+    });
+  }
+
+  if (!adminResult.skipped) {
+    logger.info("Sent order status notification to admins", {
+      transactionId: event.params.transactionId,
+      sent: adminResult.sent,
+      removed: adminResult.removed,
     });
   }
 });
