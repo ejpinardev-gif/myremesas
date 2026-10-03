@@ -28,7 +28,9 @@ const PASSWORD_RESET_URL = 'https://myremesas-prod-deploy.vercel.app/';
 const CREATE_ORDER_API_URL = 'https://us-central1-studio-7601782447-44d81.cloudfunctions.net/createOrder';
 const GET_ADMIN_USERS_API_URL = 'https://us-central1-studio-7601782447-44d81.cloudfunctions.net/getAdminUsers';
 const FCM_SERVICE_WORKER_PATH = '/firebase-messaging-sw.js';
-const FCM_VAPID_KEY = document.querySelector('meta[name="fcm-vapid-key"]')?.content?.trim() || '';
+const DEFAULT_FCM_VAPID_KEY = 'BFNcb73pe5UDh4PULL0QwaEo7SogqDwiFZkE_H9vfv7C2Ct_dmri8sr-0An3eGhXs1SMl0X-6USrW3yH2geJx5c';
+const metaVapidKey = document.querySelector('meta[name="fcm-vapid-key"]')?.content?.trim();
+const FCM_VAPID_KEY = (metaVapidKey && !metaVapidKey.startsWith('BDOU99')) ? metaVapidKey : DEFAULT_FCM_VAPID_KEY;
 
 // Cotización: el precio se congela al abrir el checkout y caduca en 5 minutos
 const PAYMENT_RATE_VALIDITY_MS = 300_000;
@@ -488,7 +490,8 @@ async function ensurePushMessaging() {
     if (!supported) throw new Error('Este navegador no soporta Firebase Cloud Messaging.');
 
     if (!pushRegistration) {
-        await navigator.serviceWorker.register(FCM_SERVICE_WORKER_PATH, { scope: '/' });
+        pushRegistration = await navigator.serviceWorker.register(FCM_SERVICE_WORKER_PATH, { scope: '/' });
+        await pushRegistration.update().catch(() => {});
         pushRegistration = await navigator.serviceWorker.ready;
     }
     if (!messaging) {
@@ -580,7 +583,7 @@ async function requestPushNotifications() {
         const rawMessage = error?.message || '';
         let userMessage = rawMessage || 'No se pudieron activar las notificaciones.';
         if (/push service error/i.test(rawMessage)) {
-            userMessage = 'Error del servicio push del navegador. Si usas Brave activa los servicios push en Ajustes; en Chrome revisa tu conexión o extensiones.';
+            userMessage = 'Error del servicio push. En Android, revisa que Chrome tenga permiso de notificaciones en Ajustes de la app o borra datos del sitio.';
         }
         showToast(userMessage, 'error');
     } finally {
