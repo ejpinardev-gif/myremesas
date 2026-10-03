@@ -159,10 +159,18 @@ test("the admin panel provides customer registry and user order history", () => 
   assert.match(html, /id="admin-user-detail-email"/);
   assert.match(html, /id="admin-user-detail-close"/);
   assert.match(html, /id="admin-user-orders-content"/);
+  assert.match(html, /id="admin-users-pagination"/);
+  assert.match(html, /id="admin-users-page-size-select"/);
+  assert.match(html, /id="admin-users-pagination-info"/);
+  assert.match(html, /id="admin-users-prev-page-btn"/);
+  assert.match(html, /id="admin-users-next-page-btn"/);
+  assert.match(html, /id="admin-users-page-current"/);
 
   assert.match(main, /GET_ADMIN_USERS_API_URL/);
   assert.match(main, /cloudfunctions\.net\/getAdminUsers/);
   assert.match(main, /adminUsersCache/);
+  assert.match(main, /adminUsersCurrentPage/);
+  assert.match(main, /adminUsersPageSize/);
   assert.match(main, /function loadAdminUsers\b/);
   assert.match(main, /function renderAdminUsersMetrics\b/);
   assert.match(main, /function renderAdminUsersList\b/);

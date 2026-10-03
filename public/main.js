@@ -71,7 +71,7 @@ let marginConfig = { ...DEFAULT_MARGIN_CONFIG };
 let marginConfigUnsubscribe = null;
 
 // --- DECLARACIN DE VARIABLES DEL DOM ---
-let userIdDisplay, userIdContainer, authStatus, amountSendInput, currencySendSelect, currencyReceiveSelect, swapButton, amountReceiveDisplay, rateDisplay, suggestedRateDisplay, paymentButton, errorMessage, historyContainer, loadingHistory, adminPanel, rateFetchStatus, rateLastUpdated, ticketLiveStatus, savedAccountsList, accountCount, wldUsdtDisplay, usdtClpP2pWldDisplay, clpUsdtP2pDisplay, vesUsdtP2pDisplay, usdtClpMarginDisplay, adminBankNameInput, adminAccountHolderInput, adminAccountNumberInput, adminRutInput, adminAccountTypeInput, adminEmailInput, saveAccountsButton, accountStatus, paymentModal, closeModalButton, modalAmountSend, modalAmountReceive, noAccountsMessage, modalCryptoWarning, modalTransferCurrency, adminToggleContainer, marginWldClpInput, marginClpVesInput, marginUsdtClpInput, saveMarginsButton, marginStatus, marginWldClpLabel, marginClpVesLabel, marginUsdtClpLabel, receiptUploadInput, uploadReceiptButton, receiptUploadStatus, adminTransactionsSection, adminPendingTransactionsList, adminCompletedTransactionsList, adminOrdersStatus, adminLoadMoreButton, usdtDestinationForm, usdtWalletInput, usdtNetworkSelect, usdtNotesInput, vesDestinationForm, vesBeneficiaryInput, vesIdInput, vesBankInput, vesAccountTypeInput, vesAccountNumberInput, vesNotesInput, imageViewerModal, closeImageViewerButton, imageViewerImg, imageViewerTitle, orderCreationSection, adminAccountSelect, selectedAdminAccountDetails, binanceBalanceCard, usdtBalanceDisplay, refreshUsdtBalanceButton, usdtBalanceStatus, menuToggleButton, appNavMenu, menuBackdrop, menuCloseButton, menuUserEmail, menuLogoutButton, historySection, amountLoadingIndicator, historyLoadMoreButton, adminUsersSection, adminUsersStatus, adminRefreshUsersBtn, adminTotalUsersCount, adminUsersWithOrdersCount, adminUsersTotalOrdersCount, adminUsersSearchInput, adminUsersFilterSelect, adminUsersList, adminUserDetailModal, adminUserDetailTitle, adminUserDetailEmail, adminUserDetailClose, adminUserOrdersContent;
+let userIdDisplay, userIdContainer, authStatus, amountSendInput, currencySendSelect, currencyReceiveSelect, swapButton, amountReceiveDisplay, rateDisplay, suggestedRateDisplay, paymentButton, errorMessage, historyContainer, loadingHistory, adminPanel, rateFetchStatus, rateLastUpdated, ticketLiveStatus, savedAccountsList, accountCount, wldUsdtDisplay, usdtClpP2pWldDisplay, clpUsdtP2pDisplay, vesUsdtP2pDisplay, usdtClpMarginDisplay, adminBankNameInput, adminAccountHolderInput, adminAccountNumberInput, adminRutInput, adminAccountTypeInput, adminEmailInput, saveAccountsButton, accountStatus, paymentModal, closeModalButton, modalAmountSend, modalAmountReceive, noAccountsMessage, modalCryptoWarning, modalTransferCurrency, adminToggleContainer, marginWldClpInput, marginClpVesInput, marginUsdtClpInput, saveMarginsButton, marginStatus, marginWldClpLabel, marginClpVesLabel, marginUsdtClpLabel, receiptUploadInput, uploadReceiptButton, receiptUploadStatus, adminTransactionsSection, adminPendingTransactionsList, adminCompletedTransactionsList, adminOrdersStatus, adminLoadMoreButton, usdtDestinationForm, usdtWalletInput, usdtNetworkSelect, usdtNotesInput, vesDestinationForm, vesBeneficiaryInput, vesIdInput, vesBankInput, vesAccountTypeInput, vesAccountNumberInput, vesNotesInput, imageViewerModal, closeImageViewerButton, imageViewerImg, imageViewerTitle, orderCreationSection, adminAccountSelect, selectedAdminAccountDetails, binanceBalanceCard, usdtBalanceDisplay, refreshUsdtBalanceButton, usdtBalanceStatus, menuToggleButton, appNavMenu, menuBackdrop, menuCloseButton, menuUserEmail, menuLogoutButton, historySection, amountLoadingIndicator, historyLoadMoreButton, adminUsersSection, adminUsersStatus, adminRefreshUsersBtn, adminTotalUsersCount, adminUsersWithOrdersCount, adminUsersTotalOrdersCount, adminUsersSearchInput, adminUsersFilterSelect, adminUsersList, adminUsersPagination, adminUsersPageSizeSelect, adminUsersPaginationInfo, adminUsersPrevPageBtn, adminUsersNextPageBtn, adminUsersPageCurrent, adminUserDetailModal, adminUserDetailTitle, adminUserDetailEmail, adminUserDetailClose, adminUserOrdersContent;
 
 let currentTransactionId = null;
 let currentTransactionPath = null;
@@ -98,6 +98,13 @@ let hasLoadedAdminOrders = false;
 let hasLoadedAdminConfigRealtime = false;
 let hasLoadedAdminUsers = false;
 let adminUsersCache = [];
+let adminUsersCurrentPage = 1;
+let adminUsersPageSize = 10;
+let totalPages = 1;
+
+function setAdminUsersTotalPages(val) {
+    totalPages = val;
+}
 let adminTransactionsCursor = null;
 let adminTransactionsHasMore = false;
 let userTransactionsCursor = null;
@@ -238,6 +245,12 @@ function initializeDOM() {
     adminUsersSearchInput = document.getElementById('admin-users-search-input');
     adminUsersFilterSelect = document.getElementById('admin-users-filter-select');
     adminUsersList = document.getElementById('admin-users-list');
+    adminUsersPagination = document.getElementById('admin-users-pagination');
+    adminUsersPageSizeSelect = document.getElementById('admin-users-page-size-select');
+    adminUsersPaginationInfo = document.getElementById('admin-users-pagination-info');
+    adminUsersPrevPageBtn = document.getElementById('admin-users-prev-page-btn');
+    adminUsersNextPageBtn = document.getElementById('admin-users-next-page-btn');
+    adminUsersPageCurrent = document.getElementById('admin-users-page-current');
     adminUserDetailModal = document.getElementById('admin-user-detail-modal');
     adminUserDetailTitle = document.getElementById('admin-user-detail-title');
     adminUserDetailEmail = document.getElementById('admin-user-detail-email');
@@ -1361,70 +1374,96 @@ function renderAdminUsersList() {
         return true;
     });
 
+    const totalFiltered = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(totalFiltered / adminUsersPageSize));
+    setAdminUsersTotalPages(totalPages);
+    if (adminUsersCurrentPage > totalPages) adminUsersCurrentPage = totalPages;
+    if (adminUsersCurrentPage < 1) adminUsersCurrentPage = 1;
+    const startIndex = (adminUsersCurrentPage - 1) * adminUsersPageSize;
+    const endIndex = Math.min(startIndex + adminUsersPageSize, totalFiltered);
+    const paginated = filtered.slice(startIndex, endIndex);
+
     adminUsersList.innerHTML = '';
-    if (filtered.length === 0) {
+    if (totalFiltered === 0) {
         adminUsersList.innerHTML = '<p class="text-sm text-slate-500 p-4 text-center">No se encontraron usuarios con los criterios seleccionados.</p>';
-        return;
+    } else {
+        paginated.forEach((user) => {
+            const card = document.createElement('div');
+            card.className = 'admin-user-card m3-transaction-card p-4 space-y-3 text-xs sm:text-sm';
+
+            const displayName = escapeHtml(user.displayName || 'Sin nombre');
+            const email = escapeHtml(user.email || 'Sin correo');
+            const uidShort = escapeHtml((user.uid || '').slice(0, 10) + '...');
+            const createdAt = user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A';
+            const lastSignInAt = user.lastSignInAt ? new Date(user.lastSignInAt).toLocaleDateString() : 'Nunca';
+
+            const total = user.totalOrders || 0;
+            const pending = user.pendingOrders || 0;
+            const completed = user.completedOrders || 0;
+
+            card.innerHTML = `
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-2">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <strong class="text-sm font-semibold text-slate-900">${email}</strong>
+                            ${user.displayName ? `<span class="text-xs text-slate-500">(${displayName})</span>` : ''}
+                        </div>
+                        <p class="text-xs text-slate-400 font-mono mt-0.5">UID: ${uidShort}</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" class="btn btn-outline btn-sm admin-user-view-history-btn" data-user-id="${escapeHtml(user.uid || '')}">
+                            Ver historial (${total})
+                        </button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs">
+                    <div class="bg-slate-50 rounded p-2">
+                        <span class="text-slate-500 block">Registrado</span>
+                        <strong class="text-slate-700">${createdAt}</strong>
+                    </div>
+                    <div class="bg-slate-50 rounded p-2">
+                        <span class="text-slate-500 block">Último acceso</span>
+                        <strong class="text-slate-700">${lastSignInAt}</strong>
+                    </div>
+                    <div class="bg-amber-50 rounded p-2">
+                        <span class="text-amber-700 block">Pendientes</span>
+                        <strong class="text-amber-900">${pending}</strong>
+                    </div>
+                    <div class="bg-emerald-50 rounded p-2">
+                        <span class="text-emerald-700 block">Completadas</span>
+                        <strong class="text-emerald-900">${completed}</strong>
+                    </div>
+                </div>
+            `;
+
+            const viewHistoryBtn = card.querySelector('.admin-user-view-history-btn');
+            if (viewHistoryBtn) {
+                viewHistoryBtn.addEventListener('click', () => {
+                    openAdminUserDetail(user);
+                });
+            }
+
+            adminUsersList.appendChild(card);
+        });
     }
 
-    filtered.forEach((user) => {
-        const card = document.createElement('div');
-        card.className = 'admin-user-card m3-transaction-card p-4 space-y-3 text-xs sm:text-sm';
-
-        const displayName = escapeHtml(user.displayName || 'Sin nombre');
-        const email = escapeHtml(user.email || 'Sin correo');
-        const uidShort = escapeHtml((user.uid || '').slice(0, 10) + '...');
-        const createdAt = user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A';
-        const lastSignInAt = user.lastSignInAt ? new Date(user.lastSignInAt).toLocaleDateString() : 'Nunca';
-
-        const total = user.totalOrders || 0;
-        const pending = user.pendingOrders || 0;
-        const completed = user.completedOrders || 0;
-
-        card.innerHTML = `
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-2">
-                <div class="min-w-0">
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <strong class="text-sm font-semibold text-slate-900">${email}</strong>
-                        ${user.displayName ? `<span class="text-xs text-slate-500">(${displayName})</span>` : ''}
-                    </div>
-                    <p class="text-xs text-slate-400 font-mono mt-0.5">UID: ${uidShort}</p>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button type="button" class="btn btn-outline btn-sm admin-user-view-history-btn" data-user-id="${escapeHtml(user.uid || '')}">
-                        Ver historial (${total})
-                    </button>
-                </div>
-            </div>
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs">
-                <div class="bg-slate-50 rounded p-2">
-                    <span class="text-slate-500 block">Registrado</span>
-                    <strong class="text-slate-700">${createdAt}</strong>
-                </div>
-                <div class="bg-slate-50 rounded p-2">
-                    <span class="text-slate-500 block">Último acceso</span>
-                    <strong class="text-slate-700">${lastSignInAt}</strong>
-                </div>
-                <div class="bg-amber-50 rounded p-2">
-                    <span class="text-amber-700 block">Pendientes</span>
-                    <strong class="text-amber-900">${pending}</strong>
-                </div>
-                <div class="bg-emerald-50 rounded p-2">
-                    <span class="text-emerald-700 block">Completadas</span>
-                    <strong class="text-emerald-900">${completed}</strong>
-                </div>
-            </div>
-        `;
-
-        const viewHistoryBtn = card.querySelector('.admin-user-view-history-btn');
-        if (viewHistoryBtn) {
-            viewHistoryBtn.addEventListener('click', () => {
-                openAdminUserDetail(user);
-            });
-        }
-
-        adminUsersList.appendChild(card);
-    });
+    if (adminUsersPaginationInfo) {
+        adminUsersPaginationInfo.textContent = totalFiltered === 0
+            ? 'Mostrando 0 de 0'
+            : `Mostrando ${startIndex + 1}-${endIndex} de ${totalFiltered}`;
+    }
+    if (adminUsersPageCurrent) {
+        adminUsersPageCurrent.textContent = `${adminUsersCurrentPage} / ${totalPages}`;
+    }
+    if (adminUsersPrevPageBtn) {
+        adminUsersPrevPageBtn.disabled = adminUsersCurrentPage <= 1;
+    }
+    if (adminUsersNextPageBtn) {
+        adminUsersNextPageBtn.disabled = adminUsersCurrentPage >= totalPages;
+    }
+    if (adminUsersPagination) {
+        adminUsersPagination.classList.toggle('hidden', totalFiltered === 0);
+    }
 }
 
 function openAdminUserDetail(user) {
@@ -3502,12 +3541,41 @@ function registerStaticEventListeners() {
     if (vesNotesInput) vesNotesInput.addEventListener('input', scheduleVesDestinationPersist);
     if (adminUsersSearchInput) {
         adminUsersSearchInput.addEventListener('input', () => {
+            adminUsersCurrentPage = 1;
+            renderAdminUsersList();
+        });
+        adminUsersSearchInput.addEventListener('keyup', () => {
+            adminUsersCurrentPage = 1;
             renderAdminUsersList();
         });
     }
     if (adminUsersFilterSelect) {
         adminUsersFilterSelect.addEventListener('change', () => {
+            adminUsersCurrentPage = 1;
             renderAdminUsersList();
+        });
+    }
+    if (adminUsersPageSizeSelect) {
+        adminUsersPageSizeSelect.addEventListener('change', () => {
+            adminUsersPageSize = Number(adminUsersPageSizeSelect.value) || 10;
+            adminUsersCurrentPage = 1;
+            renderAdminUsersList();
+        });
+    }
+    if (adminUsersPrevPageBtn) {
+        adminUsersPrevPageBtn.addEventListener('click', () => {
+            if (adminUsersCurrentPage > 1) {
+                adminUsersCurrentPage--;
+                renderAdminUsersList();
+            }
+        });
+    }
+    if (adminUsersNextPageBtn) {
+        adminUsersNextPageBtn.addEventListener('click', () => {
+            if (adminUsersCurrentPage < totalPages) {
+                adminUsersCurrentPage++;
+                renderAdminUsersList();
+            }
         });
     }
     if (adminRefreshUsersBtn) {

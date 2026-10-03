@@ -2144,6 +2144,32 @@
                 <p class="text-sm text-slate-500 p-4 text-center">Abre esta vista para cargar el directorio de usuarios.</p>
             </div>
 
+            <div id="admin-users-pagination" class="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-200">
+                <div class="flex items-center gap-3 text-xs sm:text-sm text-slate-500">
+                    <span>Mostrar</span>
+                    <select id="admin-users-page-size-select" class="field-control py-1 px-2 text-xs sm:text-sm w-20">
+                        <option value="5">5</option>
+                        <option value="10" selected>10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                    </select>
+                    <span>por página</span>
+                    <span class="text-slate-300">|</span>
+                    <span id="admin-users-pagination-info">Mostrando 0 de 0</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="admin-users-prev-page-btn" type="button" class="btn btn-outline btn-sm" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+                        Anterior
+                    </button>
+                    <span id="admin-users-page-current" class="text-xs sm:text-sm font-semibold text-slate-700 px-2">1 / 1</span>
+                    <button id="admin-users-next-page-btn" type="button" class="btn btn-outline btn-sm" disabled>
+                        Siguiente
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                    </button>
+                </div>
+            </div>
+
             <!-- Modal de detalle de órdenes de usuario -->
             <div id="admin-user-detail-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="admin-user-detail-title">
                 <div class="modal-content relative max-w-2xl w-full">
