@@ -497,8 +497,19 @@ async function ensurePushMessaging() {
     if (!messaging) {
         messaging = getMessaging(firebaseApp);
         messagingUnsubscribe = onMessage(messaging, (payload) => {
+            const title = payload?.data?.title || payload?.notification?.title || 'My Remesas';
             const message = payload?.data?.body || payload?.notification?.body;
-            if (message) showToast(message, 'info');
+            if (message) {
+                showToast(message, 'info');
+                if (Notification.permission === 'granted' && pushRegistration) {
+                    pushRegistration.showNotification(title, {
+                        body: message,
+                        icon: '/icons/icon-192.png',
+                        badge: '/icons/icon-192.png',
+                        data: { url: payload?.data?.url || '/?view=admin-orders' },
+                    }).catch(() => {});
+                }
+            }
         });
     }
     return messaging;

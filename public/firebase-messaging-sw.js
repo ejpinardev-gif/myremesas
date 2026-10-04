@@ -28,6 +28,8 @@ messaging.onBackgroundMessage((payload) => {
 
   return self.registration.showNotification(title, {
     body,
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
     tag: data.transactionId ? `order-${data.transactionId}` : 'myremesas-order',
     renotify: true,
     data: { url },
