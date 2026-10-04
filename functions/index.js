@@ -465,3 +465,28 @@ exports.notifyOrderStatus = onDocumentWritten({
     });
   }
 });
+
+exports.sendTestAdminNotification = onRequest({ region: "us-central1", timeoutSeconds: 30, memory: "256MiB" }, async (req, res) => {
+  setHeaders(req, res);
+  if (req.method === "OPTIONS") return res.status(204).send("");
+
+  try {
+    const result = await sendAdminOrderNotifications({
+      db,
+      messaging: getMessaging(),
+      adminUids: Array.from(ADMIN_UIDS),
+      transactionId: "TEST" + Math.floor(1000 + Math.random() * 9000),
+      before: null,
+      after: { status: "Sin comprobante" },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Notificación de prueba enviada a los administradores.",
+      result,
+    });
+  } catch (error) {
+    logger.error("Error al enviar notificación de prueba:", error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
