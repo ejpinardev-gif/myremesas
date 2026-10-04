@@ -32,8 +32,8 @@ const DEFAULT_FCM_VAPID_KEY = 'BFNcb73pe5UDh4PULL0QwaEo7SogqDwiFZkE_H9vfv7C2Ct_d
 const metaVapidKey = document.querySelector('meta[name="fcm-vapid-key"]')?.content?.trim();
 const FCM_VAPID_KEY = (metaVapidKey && !metaVapidKey.startsWith('BDOU99')) ? metaVapidKey : DEFAULT_FCM_VAPID_KEY;
 
-// Cotización: el precio se congela al abrir el checkout y caduca en 5 minutos
-const PAYMENT_RATE_VALIDITY_MS = 300_000;
+// Cotización: el precio se congela al abrir el checkout y caduca en 10 minutos
+const PAYMENT_RATE_VALIDITY_MS = 600_000;
 const PAYMENT_RATE_DRIFT_THRESHOLD = 0.005;
 
 // Variables Globales de Firebase (provistas por el entorno)
