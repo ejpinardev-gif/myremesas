@@ -610,6 +610,8 @@ async function requestPushNotifications() {
         if (permission !== 'granted') {
             throw new Error('El permiso de notificaciones no fue concedido.');
         }
+        setPushNotificationStatus('Vinculando dispositivo...', 'neutral');
+        await new Promise((resolve) => setTimeout(resolve, 400));
         await syncPushNotificationToken(auth.currentUser);
         setPushNotificationStatus('Notificaciones activadas para este dispositivo.', 'success');
         if (enablePushNotificationsButton) enablePushNotificationsButton.classList.add('hidden');
@@ -617,12 +619,12 @@ async function requestPushNotifications() {
         showToast('Notificaciones de órdenes activadas.', 'success');
     } catch (error) {
         console.warn('No se pudieron activar las notificaciones push:', error);
-        setPushNotificationStatus('No se pudieron activar las notificaciones.', 'error');
         const rawMessage = error?.message || '';
         let userMessage = rawMessage || 'No se pudieron activar las notificaciones.';
         if (/push service error/i.test(rawMessage)) {
-            userMessage = 'Error del servicio push. En Android, revisa que Chrome tenga permiso de notificaciones en Ajustes de la app o borra datos del sitio.';
+            userMessage = 'Error del servicio push en Android. Toca Activar nuevamente.';
         }
+        setPushNotificationStatus(userMessage, 'error');
         showToast(userMessage, 'error');
     } finally {
         if (enablePushNotificationsButton) enablePushNotificationsButton.disabled = false;
