@@ -519,7 +519,34 @@ async function syncPushNotificationToken(user) {
     const messagingInstance = await ensurePushMessaging();
     const tokenOptions = { serviceWorkerRegistration: pushRegistration };
     if (FCM_VAPID_KEY) tokenOptions.vapidKey = FCM_VAPID_KEY;
-    const token = await getToken(messagingInstance, tokenOptions);
+
+    let token;
+    try {
+        token = await getToken(messagingInstance, tokenOptions);
+    } catch (initialError) {
+        console.warn('Primer intento de getToken falló, limpiando suscripción huérfana en el Service Worker...', initialError);
+        const reg = pushRegistration || (await navigator.serviceWorker.ready.catch(() => null));
+        if (reg?.pushManager) {
+            try {
+                const sub = await reg.pushManager.getSubscription();
+                if (sub) {
+                    await sub.unsubscribe();
+                }
+            } catch (e) {
+                console.warn('Error al desuscribir:', e);
+            }
+        }
+        if (reg) {
+            pushRegistration = reg;
+            tokenOptions.serviceWorkerRegistration = reg;
+        }
+        try {
+            if (messagingInstance) await deleteToken(messagingInstance).catch(() => {});
+        } catch (_) {}
+
+        token = await getToken(messagingInstance, tokenOptions);
+    }
+
     if (!token) throw new Error('El navegador no devolvió un token de notificaciones.');
 
     const tokenId = await getPushTokenDocumentId(token);
