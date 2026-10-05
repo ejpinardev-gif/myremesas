@@ -2240,8 +2240,22 @@ function setupTransactionListener() {
         renderTransactionHistory(userTransactionsCache);
         updateHistoryLoadMoreButton();
     }, (error) => {
-        console.error('Error al escuchar transacciones:', error);
-        if (historyContainer) historyContainer.innerHTML = '<p class="text-sm text-red-600 p-2">Error al cargar el historial.</p>';
+        console.warn('Error al escuchar transacciones con índice, intentando fallback:', error);
+        try {
+            const fallbackQ = query(userTransactionsRef, limit(USER_TRANSACTIONS_PAGE_SIZE));
+            transactionListenerUnsubscribe = onSnapshot(fallbackQ, (fallbackSnapshot) => {
+                const firstPage = fallbackSnapshot.docs.map(document => ({ id: document.id, ...document.data() }));
+                userTransactionsCache = sortTransactions(firstPage);
+                renderTransactionHistory(userTransactionsCache);
+                if (historyLoadMoreButton) historyLoadMoreButton.classList.add('hidden');
+            }, (fallbackError) => {
+                console.error('Error en fallback de historial:', fallbackError);
+                if (historyContainer) historyContainer.innerHTML = '<p class="text-sm text-red-600 p-2">Error al cargar el historial.</p>';
+            });
+        } catch (fallbackException) {
+            console.error('Error al inicializar fallback de historial:', fallbackException);
+            if (historyContainer) historyContainer.innerHTML = '<p class="text-sm text-red-600 p-2">Error al cargar el historial.</p>';
+        }
     });
 }
 
@@ -2972,10 +2986,19 @@ async function setupAdminTransactionsListener({ append = false } = {}) {
         // This keeps the admin view functional while Firestore builds indexes.
         const snapshot = await getDocs(query(collectionGroup(db, 'transactions'), limit(120)));
         const relevantDocs = snapshot.docs
-            .filter(docSnap => docSnap.ref.path.includes(`artifacts/${appId}/`))
+            .filter(docSnap => !appId || docSnap.ref.path.includes(`artifacts/${appId}/`) || docSnap.ref.path.includes('/users/'))
+            .map(docSnap => {
+                const data = docSnap.data() || {};
+                return {
+                    id: docSnap.id,
+                    path: docSnap.ref.path,
+                    ...data,
+                    status: data.status || 'Sin comprobante',
+                };
+            })
             .sort((left, right) => {
-                const leftSeconds = left.data().timestamp?.seconds || 0;
-                const rightSeconds = right.data().timestamp?.seconds || 0;
+                const leftSeconds = left.timestamp?.seconds || 0;
+                const rightSeconds = right.timestamp?.seconds || 0;
                 return rightSeconds - leftSeconds;
             });
         const page = relevantDocs.slice(0, ADMIN_TRANSACTIONS_PAGE_SIZE);
@@ -3024,8 +3047,16 @@ async function loadAdminTransactionsWithoutIndexFallback() {
 
     const snapshot = await getDocs(query(collectionGroup(db, 'transactions'), limit(120)));
     const transactions = snapshot.docs
-        .filter(docSnap => docSnap.ref.path.includes(`artifacts/${appId}/`))
-        .map(docSnap => ({ id: docSnap.id, path: docSnap.ref.path, ...docSnap.data() }));
+        .filter(docSnap => !appId || docSnap.ref.path.includes(`artifacts/${appId}/`) || docSnap.ref.path.includes('/users/'))
+        .map(docSnap => {
+            const data = docSnap.data() || {};
+            return {
+                id: docSnap.id,
+                path: docSnap.ref.path,
+                ...data,
+                status: data.status || 'Sin comprobante',
+            };
+        });
 
     transactions.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
     return transactions.slice(0, ADMIN_TRANSACTIONS_PAGE_SIZE);
