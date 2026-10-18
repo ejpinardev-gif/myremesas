@@ -187,7 +187,6 @@ async function getTrustedAdminAccount(accountId) {
     rut: readString(account.rut, 64),
     accountType: readString(account.accountType, 80),
     accountNumber: readString(account.accountNumber, 128),
-    email: readString(account.email || "N/A", 320),
   };
 }
 

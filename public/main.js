@@ -827,7 +827,7 @@ function copyToClipboard(text, element) {
     document.body.removeChild(textArea);
 }
 
-function buildAccountDetailsMarkup(account) {
+function buildAccountDetailsMarkup(account, { includeEmail = false } = {}) {
     const details = [
         { label: 'Banco', value: account.bankName },
         { label: 'Titular', value: account.accountHolder },
@@ -835,7 +835,7 @@ function buildAccountDetailsMarkup(account) {
         { label: 'Tipo', value: account.accountType },
         { label: 'Numero', value: account.accountNumber },
     ];
-    if (account.email && account.email !== 'N/A') {
+    if (includeEmail && account.email && account.email !== 'N/A') {
         details.push({ label: 'Email', value: account.email });
     }
     const sanitizedCopyText = sanitizeCopyText(details);
@@ -909,7 +909,6 @@ function buildDestinationDetailsMarkup(tx, { enableCopy = false } = {}) {
             { label: 'RUT', value: account.rut },
             { label: 'Tipo', value: account.accountType },
             { label: 'Numero', value: account.accountNumber },
-            { label: 'Email', value: account.email },
         ];
         blocks.push(buildDetailsSection('Cuenta para depositar al administrador', accountDetails, { enableCopy }));
     }
@@ -1882,9 +1881,9 @@ async function saveAdminAccounts() {
         const collectionPath = `artifacts/${appId}/public/data/admin_accounts`;
         await addDoc(collection(db, collectionPath), { ...accountData, updatedBy: userId, timestamp: serverTimestamp() });
         adminBankNameInput.value = '';
-        adminAccountHolderInput.value = 'Ender Javier Piña Rojas';
+        adminAccountHolderInput.value = '';
         adminAccountNumberInput.value = '';
-        adminRutInput.value = '26728535-7';
+        adminRutInput.value = '';
         adminAccountTypeInput.value = '';
         adminEmailInput.value = '';
         accountStatus.textContent = "Cuenta guardada correctamente!";
@@ -1943,7 +1942,7 @@ function renderAdminAccountsList() {
                 </div>
                 <button data-account-id="${account.id}" data-account-name="${account.bankName} (${account.accountType})" class="delete-account-btn btn btn-danger btn-sm">Eliminar</button>
             </div>
-            <div class="space-y-2">${buildAccountDetailsMarkup(account)}</div>
+            <div class="space-y-2">${buildAccountDetailsMarkup(account, { includeEmail: true })}</div>
         `;
         savedAccountsList.appendChild(item);
     });
