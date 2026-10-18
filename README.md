@@ -8,8 +8,6 @@ My Remesas is a Firebase-backed web app for calculating CLP, VES, USDT and WLD e
 - Vercel project: `ejpinardev-gifs-projects/myremesas-prod-deploy`
 - Firebase project: `studio-7601782447-44d81`
 
-`myremesas.vercel.app` is a different application and is not the My Remesas production endpoint.
-
 ## Runtime
 
 - Node.js 24.x
